@@ -85,7 +85,9 @@ Prototyp pod kątem funkcjonalnym: użytkownik na frontendzie wywołuje endpoint
 -   wytrenowanie i dostosowanie modeli ML
 -   wytrenowanie i dostosowanie LSTM
 
-Zadania są podzielone na dwutygodniowe sprinty, opisane w pliku gantt_chart.png
+Zadania są podzielone na dwutygodniowe sprinty, opisane w pliku gantt_chart.png:
+
+![Gantt](gantt_chart.png)
 
 ## Pytania
 
