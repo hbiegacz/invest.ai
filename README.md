@@ -1,93 +1,92 @@
-# invest.ai
+# INVEST.AI
 
+## Założenia oryginalne
 
+Aplikcja wspomagająca podejmowanie decyzji inwestycyjnych dla świadomego inwestora, który śledzi wyniki finansowe spółek giełdowych. Konieczne jest stworzenie interfejsu wyświetlającego wykresy, stworzone na podstawie danych pobranych z zewnętrznej strony. System powinien spełniać dwie funkcje: po pierwsze informować użytkownika, jeśli któryś parametr wyników ulegnie znaczącej poprawie/pogorszeniu oraz po drugie, przy zastosowaniu modelu ML przewidywać kluczowe parametry wyników na kolejny kwartał.
 
-## Getting started
+## Nasza interpretacja
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+Szukając danych do treningu modelu, mieliśmy problemy ze znalezieniem aktualnych i live danych do tradycyjnej giełdy. Udało nam się natomiast odkryć, że giełda kryptowalut Binance oferuje w pełni darmowe API. Umożliwia ono nie tylko wyświetlenie potrzebnych danych w czasie rzeczywistym, ale też odtworzenie danych historycznych na kilkanaście lat wstecz.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+Do tego, wszystkie API tradycyjnych giełd, dostępne za darmo lub w rozsądnej na projekt studencki cenie (max $10/miesiąc), oferują tylko ceny otwarcia i zamknięcia każdego dnia. Uznaliśmy, że zapewnienie uzytkownikowi danych in-real-time w dowolnym interwale jest po prostu ciekawsze i daje więcej możliwości.
 
-## Add your files
+Chemy też zmienić przewidywanie parametrów z wyników kolejnego kwartału na N świeczek w wybranym interwale. W przypadku kryptowalut podział na kwartały nie ma sensu, a 3 świeczki w interwale miesięcznym w pełni to zastąpią. Do tego, użytkownik może wybrać dowolny interwał.
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+# Bibliografia:
 
-```
-cd existing_repo
-git remote add origin https://gitlab-stud.elka.pw.edu.pl/hbiegacz/invest.ai.git
-git branch -M main
-git push -uf origin main
-```
+## API i dane historyczne
 
-## Integrate with your tools
+Postanowiliśmy wybrać API, które:
 
-- [ ] [Set up project integrations](https://gitlab-stud.elka.pw.edu.pl/hbiegacz/invest.ai/-/settings/integrations)
+1. udostępnia dane w czasie rzeczywistym (czyli umożliwia narysowanie świeczki)
+2. jest darmowe
+3. umożliwi odtworzenie dokładnych danych historycznych
 
-## Collaborate with your team
+Idealne do tego celu wydaje się API Binance:
+https://www.binance.com/api/v3
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## Jak stworzyć plik z danymi historycznymi
 
-## Test and Deploy
+API od Binance umożliwia wyświetlenie 1000 świeczek w wybranym interwale czasowym, do wybranego timestampa. To oznacza, że wywołując taki endpoint na przykład 5000 razy dla świeczek jednominutowych, uzyskujemy 10 lat dokładnych danych wykresu danej kryptowaluty. To wystarczy, żeby stworzyć dane do wytrenowania modelu do przewidywania ceny danej kryptowaluty.
 
-Use the built-in continuous integration in GitLab.
+# Implementacja
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+## Planowany stack technologiczny
 
-***
+-   React.js na frontend
+-   Django na backend
+-   SQLite na DB
+-   Kilka modeli ML do przetestowania (więcej w sekcji o eksperymentach) - biblioteka TensorFlow + Sklearn
+-   Docker
+-   Jira
 
-# Editing this README
+## Eksperymenty
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+Przetestowanie różnych modeli:
 
-## Suggestions for a good README
+-   LSTM - potencjalnie najlepszy, ale też najtrudniejszy w implementacji
+-   Random Forest - bardzo dobry do wielu zadań i stosunkowo prosty w implementacji
+-   Logistic Regression - najprostszy w implemetacji
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+-   testowanie sposobu mierzenia jakości modelu (np miara oparta o rozkład normalny)
 
-## Name
-Choose a self-explaining name for your project.
+-   sprawdzenie różnych kryptowalut
+-   sprawdzenie różnych interwałów
+-   sprawdzenie wpływu BTC na inne kryptowaluty
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+-   cel skuteczności: powyżej 51%
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+## Planowana funkcjonalność
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+-   Kilka modeli przewidujących ceny kryptowaluty. Użytkownik może wybrać model poprzez dispatcher.
+-   Rysowanie wykresu kryptowaluty + wybór interwału + dane analityczne (świeczki - informacje analityczne o zmianach)
+-   Wybór docelowej krypotowaluty
+-   Wyświetlanie przewidywanych N świeczek
+-   Powiadomienia dla użytkownika
+-   Konto użytkownika, z konfiguracją powiadomień
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+# Harmonogram
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+przed 7.11 - ukończenie prototypu (architektura, docker, szkielet aplikacji, dokumentacja i dokładna funkcjonalność)
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+Prototyp pod kątem funkcjonalnym: użytkownik na frontendzie wywołuje endpoint połączony przez nasz backend z Binance
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+## Lista zadań
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+-   zebranie i oczyszczenie danych
+-   backend - stworzenie, logowanie użytkownika, wrappery endpointów Binance
+-   backend - integracja API
+-   backend - system powiadomień
+-   baza danych - stworzenie struktury i tabel
+-   frontend - interfejs
+-   frontend - wyświetlanie wykresu
+-   frontend - integracja modeli ML i LSTM
+-   frontend - system powiadomień
+-   wytrenowanie i dostosowanie modeli ML
+-   wytrenowanie i dostosowanie LSTM
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Zadania są podzielone na dwutygodniowe sprinty, opisane w pliku gantt_chart.png
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+## Pytania
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+-   Czy jest nam potrzebny cache? Przecież my opieramy się na live danych
