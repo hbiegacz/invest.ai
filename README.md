@@ -91,4 +91,5 @@ Zadania są podzielone na dwutygodniowe sprinty, opisane w pliku gantt_chart.png
 
 ## Pytania
 
--   Czy jest nam potrzebny cache? Przecież my opieramy się na live danych
+-   Czy możemy trzymać się naszej zmiany z tradycyjnej giełdy na krypto?
+-   Czy jest nam potrzebny cache? Według nas, jeśli opieramy się na danych w czasie rzeczywistym, cache wcale nie przyspieszy działania aplikacji na tyle, żeby warto było go implementować.
