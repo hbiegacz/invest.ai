@@ -50,6 +50,8 @@ Przetestowanie różnych modeli:
 
 -   testowanie sposobu mierzenia jakości modelu (np miara oparta o rozkład normalny)
 
+-   trenowanie modeli na naszych prywatnych komputerach
+
 -   sprawdzenie różnych kryptowalut
 -   sprawdzenie różnych interwałów
 -   sprawdzenie wpływu BTC na inne kryptowaluty
@@ -84,10 +86,20 @@ Prototyp pod kątem funkcjonalnym: użytkownik na frontendzie wywołuje endpoint
 -   frontend - system powiadomień
 -   wytrenowanie i dostosowanie modeli ML
 -   wytrenowanie i dostosowanie LSTM
+-   testy
+-   instrukcja
+-   dokumentacja końcowa
 
-Zadania są podzielone na dwutygodniowe sprinty, opisane w pliku gantt_chart.png:
+Zadania są podzielone na cztery sprinty, opisane w pliku gantt_chart.png:
 
 ![Gantt](gantt_chart.png)
+
+## Harmonogram sprintów
+
+-   Sprint 1: 24.10.2025 - 07.11.2025
+-   Sprint 2: 08.11.2025 - 21.11.2025
+-   Sprint 3: 22.11.2025 - 12.12.2025
+-   Sprint 4: 13.12.2025 - 09.01.2026
 
 ## Pytania
 
