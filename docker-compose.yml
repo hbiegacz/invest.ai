@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  database:
+    image: nouchka/sqlite3:latest
+    volumes:
+      - ./data/database:/root/database
+    environment:
+      - SQLITE3_BD=db.sqlite3
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+        - ./backend:/backend
+    command: python3 manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - database
+    
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "3000:3000"
+    stdin_open: true
+    tty: true
+    depends_on:
+      - backend
