@@ -24,8 +24,8 @@ Sprawdzimy, czy występują zależności pomiędzy tymi potencjalnymi fundamenta
 
 Postanowiliśmy wybrać API, które:
 
-1. jest darmowe
-2. umożliwi odtworzenie dokładnych danych historycznych
+1. są darmowe
+2. umożliwią odtworzenie dokładnych danych historycznych
 
 Idealne do tego celu wydają się api:
 Binance
