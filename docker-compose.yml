@@ -9,12 +9,13 @@ services:
       - SQLITE3_BD=db.sqlite3
 
   backend:
+    environment:
+      - FRED_API_KEY=${FRED_API_KEY}
     build: 
       context: ./backend
       dockerfile: Dockerfile
     volumes:
         - ./backend:/backend
-    # command: python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000\
     command: bash -c "python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
