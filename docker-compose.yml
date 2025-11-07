@@ -1,36 +1,44 @@
 version: "3.8"
 
 services:
-  database:
-    image: nouchka/sqlite3:latest
-    volumes:
-      - ./data/database:/root/database
-    environment:
-      - SQLITE3_BD=db.sqlite3
+    database:
+        image: nouchka/sqlite3:latest
+        volumes:
+            - ./data/database:/root/database
+        environment:
+            - SQLITE3_BD=db.sqlite3
 
-  backend:
-    environment:
-      - FRED_API_KEY=${FRED_API_KEY}
-    build: 
-      context: ./backend
-      dockerfile: Dockerfile
-    volumes:
-        - ./backend:/backend
-    command: bash -c "python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"
-    ports:
-      - "8000:8000"
-    depends_on:
-      - database
-    
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    volumes:
-      - ./frontend:/app
-    ports:
-      - "3000:3000"
-    stdin_open: true
-    tty: true
-    depends_on:
-      - backend
+    backend:
+        environment:
+            - FRED_API_KEY=${FRED_API_KEY}
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+        working_dir: /backend
+        volumes:
+            - ./backend:/backend
+        command: bash -lc "python3 manage.py migrate && python3 manage.py runserver 0.0.0.0:8000"
+        ports:
+            - "8000:8000"
+        depends_on:
+            - database
+
+    frontend:
+        build:
+            context: ./frontend
+            dockerfile: Dockerfile
+        working_dir: /app
+        volumes:
+            - ./frontend:/app
+            - /app/node_modules
+        environment:
+            - CHOKIDAR_USEPOLLING=true
+            - WATCHPACK_POLLING=true
+            - HOST=0.0.0.0
+            - NPM_SCRIPT=dev
+        ports:
+            - "5173:5173"
+        stdin_open: true
+        tty: true
+        depends_on:
+            - backend
