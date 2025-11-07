@@ -1,3 +1,46 @@
+==== .\eslint.config.js ====
+import js from '@eslint/js'
+import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+import tseslint from 'typescript-eslint'
+import { defineConfig, globalIgnores } from 'eslint/config'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      js.configs.recommended,
+      tseslint.configs.recommended,
+      reactHooks.configs['recommended-latest'],
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+    },
+  },
+])
+
+
+==== .\index.html ====
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>app</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+
+==== .\package-lock.json ====
 {
   "name": "app",
   "version": "0.0.0",
@@ -3651,3 +3694,353 @@
     }
   }
 }
+
+
+==== .\package.json ====
+{
+  "name": "app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host --port 5173",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host --port 5173"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.1.17",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.36.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.22",
+    "globals": "^16.4.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.45.0",
+    "vite": "npm:rolldown-vite@7.1.14"
+  },
+  "overrides": {
+    "vite": "npm:rolldown-vite@7.1.14"
+  }
+}
+
+
+==== .\postcss.config.js ====
+export default {
+	plugins: {
+		tailwindcss: {},
+		autoprefixer: {},
+	},
+};
+
+
+==== .\tailwind.config.js ====
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  theme: { extend: {} },
+  plugins: [],
+}
+
+
+==== .\tsconfig.app.json ====
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "types": ["vite/client"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  },
+  "include": ["src"]
+}
+
+
+==== .\tsconfig.json ====
+{
+	"compilerOptions": {
+		"target": "ES2020",
+		"lib": ["ES2020", "DOM", "DOM.Iterable"],
+		"module": "ESNext",
+		"jsx": "react-jsx",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"skipLibCheck": true,
+		"types": ["vite/client"]
+	},
+	"include": ["src"]
+}
+
+
+==== .\tsconfig.node.json ====
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  },
+  "include": ["vite.config.ts"]
+}
+
+
+==== .\src\App.css ====
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+
+==== .\src\App.tsx ====
+import React from "react";
+import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
+import Landing from "./pages/Landing";
+import Charts from "./pages/Charts";
+import Analysis from "./pages/Analysis";
+
+const linkClass = ({ isActive }: { isActive: boolean }) => `px-3 py-2 rounded-xl transition hover:bg-slate-100 ${isActive ? "bg-slate-200 font-medium" : ""}`;
+
+export default function App() {
+	return (
+		<BrowserRouter>
+			<div className="min-h-screen bg-slate-50 text-slate-900">
+				<header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
+					<nav className="max-w-5xl mx-auto flex gap-2 p-4">
+						<NavLink to="/" className={linkClass} end>
+							Landing
+						</NavLink>
+						<NavLink to="/wykresy" className={linkClass}>
+							Wykresy
+						</NavLink>
+						<NavLink to="/analiza" className={linkClass}>
+							Analiza
+						</NavLink>
+					</nav>
+				</header>
+
+				<main className="max-w-5xl mx-auto p-6">
+					<Routes>
+						<Route path="/" element={<Landing />} />
+						<Route path="/wykresy" element={<Charts />} />
+						<Route path="/analiza" element={<Analysis />} />
+					</Routes>
+				</main>
+
+				<footer className="text-center text-sm text-slate-500 py-6">© {new Date().getFullYear()} app</footer>
+			</div>
+		</BrowserRouter>
+	);
+}
+
+
+==== .\src\index.css ====
+@import "tailwindcss";
+
+html,
+body,
+#root {
+	height: 100%;
+}
+
+
+==== .\src\main.tsx ====
+import React from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./index.css";
+
+createRoot(document.getElementById("root")!).render(<App />);
+
+
+==== .\src\pages\Analysis.tsx ====
+import React from "react";
+
+export default function Analysis() {
+	const [loading, setLoading] = React.useState(false);
+	const [error, setError] = React.useState<string | null>(null);
+	const [items, setItems] = React.useState<Array<{ id: number; title: string }>>([]);
+
+	async function fetchTodos() {
+		setLoading(true);
+		setError(null);
+		try {
+			const res = await fetch("https://jsonplaceholder.typicode.com/todos?_limit=5");
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const json = await res.json();
+			setItems(json);
+		} catch (e: any) {
+			setError(e?.message || "Błąd");
+		} finally {
+			setLoading(false);
+		}
+	}
+
+	return (
+		<section className="grid gap-4">
+			<h2 className="text-2xl font-bold">Analiza</h2>
+			<div className="rounded-2xl border bg-white p-6 shadow-sm">
+				<div className="flex items-center gap-3">
+					<button onClick={fetchTodos} className="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50" disabled={loading}>
+						{loading ? "Ładowanie…" : "Pobierz przykładowe dane"}
+					</button>
+					{error && <span className="text-red-600 text-sm">{error}</span>}
+				</div>
+
+				<ul className="mt-4 grid gap-2">
+					{items.map((t) => (
+						<li key={t.id} className="rounded-xl border p-3 bg-slate-50">
+							<span className="text-sm text-slate-700">#{t.id}</span>
+							<div className="font-medium">{t.title}</div>
+						</li>
+					))}
+				</ul>
+
+				{!loading && items.length === 0 && !error && <p className="text-sm text-slate-500 mt-3">Brak danych — kliknij przycisk powyżej.</p>}
+			</div>
+		</section>
+	);
+}
+
+
+==== .\src\pages\Charts.tsx ====
+import React from "react";
+
+const data = [12, 8, 18, 5, 14, 10, 16];
+
+export default function Charts() {
+	const max = Math.max(...data);
+	return (
+		<section>
+			<h2 className="text-2xl font-bold mb-4">Wykresy</h2>
+			<div className="rounded-2xl border bg-white p-6 shadow-sm">
+				<div className="flex items-end gap-2 h-48">
+					{data.map((v, i) => (
+						<div key={i} className="flex-1">
+							<div className="w-full rounded-t-xl bg-indigo-500" style={{ height: `${(v / max) * 100}%` }} title={`Wartość: ${v}`} />
+							<div className="text-center text-xs mt-1 text-slate-500">{i + 1}</div>
+						</div>
+					))}
+				</div>
+			</div>
+		</section>
+	);
+}
+
+
+==== .\src\pages\Landing.tsx ====
+import React from "react";
+import { Link } from "react-router-dom";
+
+export default function Landing() {
+	return (
+		<section className="grid gap-6">
+			<div className="rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-8 text-white">
+				<h1 className="text-3xl md:text-4xl font-bold">Witaj w aplikacji starter</h1>
+				<p className="mt-2 opacity-90">React + Vite + Tailwind 4 + React Router. 3 podstrony i przykład wywołania API.</p>
+				<div className="mt-6 flex gap-3">
+					<Link to="/wykresy" className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl">
+						Zobacz wykresy
+					</Link>
+					<Link to="/analiza" className="bg-white text-slate-900 hover:bg-slate-100 px-4 py-2 rounded-xl">
+						Analiza / API
+					</Link>
+				</div>
+			</div>
+
+			<div className="grid md:grid-cols-3 gap-4">
+				{["Szybki", "Nowoczesny", "Minimalny"].map((t) => (
+					<div key={t} className="rounded-2xl border bg-white p-5 shadow-sm">
+						<h3 className="font-semibold">{t}</h3>
+						<p className="text-sm text-slate-600 mt-1">Wykorzystuje najnowsze wersje bibliotek i proste style Tailwinda.</p>
+					</div>
+				))}
+			</div>
+		</section>
+	);
+}
+
+

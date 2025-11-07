@@ -1,35 +1,39 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React from "react";
+import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
+import Landing from "./pages/Landing";
+import Charts from "./pages/Charts";
+import Analysis from "./pages/Analysis";
 
-function App() {
-  const [count, setCount] = useState(0)
+const linkClass = ({ isActive }: { isActive: boolean }) => `px-3 py-2 rounded-xl transition hover:bg-slate-100 ${isActive ? "bg-slate-200 font-medium" : ""}`;
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+export default function App() {
+	return (
+		<BrowserRouter>
+			<div className="min-h-screen bg-slate-50 text-slate-900">
+				<header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
+					<nav className="max-w-5xl mx-auto flex gap-2 p-4">
+						<NavLink to="/" className={linkClass} end>
+							Landing
+						</NavLink>
+						<NavLink to="/wykresy" className={linkClass}>
+							Wykresy
+						</NavLink>
+						<NavLink to="/analiza" className={linkClass}>
+							Analiza
+						</NavLink>
+					</nav>
+				</header>
+
+				<main className="max-w-5xl mx-auto p-6">
+					<Routes>
+						<Route path="/" element={<Landing />} />
+						<Route path="/wykresy" element={<Charts />} />
+						<Route path="/analiza" element={<Analysis />} />
+					</Routes>
+				</main>
+
+				<footer className="text-center text-sm text-slate-500 py-6">© {new Date().getFullYear()} app</footer>
+			</div>
+		</BrowserRouter>
+	);
 }
-
-export default App
