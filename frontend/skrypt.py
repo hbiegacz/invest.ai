@@ -12,7 +12,7 @@ def save_files_content_to_txt(root_folder, output_file, ignore_dirs=None):
             for file in files:
                 # if file.endswith(('.py', '.env', '.example', '.txt', '.md', '.log')):
                 # if file.endswith(('.py', '.txt', '.md', '.php')):
-                if file.endswith(('.css', '.tsx', '.js', '.html', '.json')):
+                if file.endswith(('.css', '.tsx', '.js', '.html', '.json', '.sh', 'Dockerfile')):
                     file_path = os.path.join(root, file)
                     try:
                         with open(file_path, 'r', encoding='utf-8') as infile:

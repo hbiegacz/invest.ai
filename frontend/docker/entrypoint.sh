@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env -S bash -euo pipefail
 set -euo pipefail
 cd /app
 
@@ -27,3 +27,6 @@ else
   node -e "const s=require('./package.json').scripts||{}; console.log(Object.keys(s).join('\n'))"
   exec bash
 fi
+
+echo "Sleeping for 1 minute..."
+sleep 60

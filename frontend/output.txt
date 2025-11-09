@@ -1,3 +1,27 @@
+==== .\Dockerfile ====
+FROM node:20-bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends bash git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY . .
+
+ENV CHOKIDAR_USEPOLLING=true
+ENV WATCHPACK_POLLING=true
+ENV HOST=0.0.0.0
+ENV NPM_SCRIPT=dev
+
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 5173
+ENTRYPOINT ["/entrypoint.sh"]
+
+
 ==== .\eslint.config.js ====
 import js from '@eslint/js'
 import globals from 'globals'
@@ -3739,8 +3763,7 @@ export default defineConfig([
 ==== .\postcss.config.js ====
 export default {
 	plugins: {
-		tailwindcss: {},
-		autoprefixer: {},
+		"@tailwindcss/postcss": {},
 	},
 };
 
@@ -3828,6 +3851,41 @@ export default {
   },
   "include": ["vite.config.ts"]
 }
+
+
+==== .\docker\entrypoint.sh ====
+#!/usr/bin/env bash
+set -euo pipefail
+cd /app
+
+if [ ! -f package.json ]; then
+  echo "package.json not found in /app. Opening a shell."
+  exec bash
+fi
+
+if [ ! -d node_modules ] || [ -z "$(ls -A node_modules 2>/dev/null || true)" ]; then
+  if [ -f package-lock.json ]; then
+    echo "Installing deps with npm ci..."
+    npm ci
+  else
+    echo "Installing deps with npm install..."
+    npm install
+  fi
+fi
+
+SCRIPT="${NPM_SCRIPT:-dev}"
+if node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts['$SCRIPT'] ? 0 : 1)"; then
+  echo "Starting: npm run $SCRIPT"
+  exec npm run "$SCRIPT"
+else
+  echo "Script \"$SCRIPT\" not found in package.json. Opening a shell."
+  echo "Available scripts:"
+  node -e "const s=require('./package.json').scripts||{}; console.log(Object.keys(s).join('\n'))"
+  exec bash
+fi
+
+echo "Sleeping for 1 minute..."
+sleep 60
 
 
 ==== .\src\App.css ====
@@ -3920,12 +3978,6 @@ export default function App() {
 ==== .\src\index.css ====
 @import "tailwindcss";
 
-html,
-body,
-#root {
-	height: 100%;
-}
-
 
 ==== .\src\main.tsx ====
 import React from "react";
@@ -3939,19 +3991,46 @@ createRoot(document.getElementById("root")!).render(<App />);
 ==== .\src\pages\Analysis.tsx ====
 import React from "react";
 
+type Endpoint = { key: string; label: string };
+
+const API_BASE = "http://localhost:8000/marketdata";
+
+const ENDPOINTS: Endpoint[] = [
+	{ key: "binance-test", label: "Binance" },
+	{ key: "fred-test", label: "FRED" },
+	{ key: "stooq-test", label: "Stooq" },
+	{ key: "coinmetrics-test", label: "CoinMetrics" },
+];
+
 export default function Analysis() {
 	const [loading, setLoading] = React.useState(false);
 	const [error, setError] = React.useState<string | null>(null);
-	const [items, setItems] = React.useState<Array<{ id: number; title: string }>>([]);
+	const [data, setData] = React.useState<any>(null);
+	const [selected, setSelected] = React.useState<string | null>(null);
+	const [status, setStatus] = React.useState<number | null>(null);
+	const [durationMs, setDurationMs] = React.useState<number | null>(null);
 
-	async function fetchTodos() {
+	async function callEndpoint(key: string) {
+		setSelected(key);
 		setLoading(true);
 		setError(null);
+		setStatus(null);
+		setDurationMs(null);
+		setData(null);
+
+		const url = `${API_BASE}/${key}/`;
 		try {
-			const res = await fetch("https://jsonplaceholder.typicode.com/todos?_limit=5");
+			const t0 = performance.now();
+			const res = await fetch(url);
+			const t1 = performance.now();
+			setDurationMs(Math.round(t1 - t0));
+			setStatus(res.status);
+
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const json = await res.json();
-			setItems(json);
+
+			const ct = res.headers.get("content-type") || "";
+			const body = ct.includes("application/json") ? await res.json() : await res.text();
+			setData(body);
 		} catch (e: any) {
 			setError(e?.message || "Błąd");
 		} finally {
@@ -3959,27 +4038,51 @@ export default function Analysis() {
 		}
 	}
 
+	function ResponseView({ value }: { value: any }) {
+		if (value === null || value === undefined) return null;
+		if (typeof value === "string") {
+			return <pre className="mt-3 max-h-[480px] overflow-auto rounded-xl bg-slate-900 p-4 text-slate-100 text-sm">{value}</pre>;
+		}
+		return <pre className="mt-3 max-h-[480px] overflow-auto rounded-xl bg-slate-900 p-4 text-slate-100 text-sm">{JSON.stringify(value, null, 2)}</pre>;
+	}
+
 	return (
 		<section className="grid gap-4">
 			<h2 className="text-2xl font-bold">Analiza</h2>
+
 			<div className="rounded-2xl border bg-white p-6 shadow-sm">
-				<div className="flex items-center gap-3">
-					<button onClick={fetchTodos} className="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50" disabled={loading}>
-						{loading ? "Ładowanie…" : "Pobierz przykładowe dane"}
-					</button>
-					{error && <span className="text-red-600 text-sm">{error}</span>}
+				<div className="flex flex-wrap items-center gap-2">
+					{ENDPOINTS.map((ep) => {
+						const active = selected === ep.key;
+						return (
+							<button
+								key={ep.key}
+								onClick={() => callEndpoint(ep.key)}
+								className={`px-4 py-2 rounded-xl border transition ${active ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-900 hover:bg-slate-50 border-slate-200"} disabled:opacity-50`}
+								disabled={loading && active}
+								title={`${API_BASE}/${ep.key}/`}>
+								{loading && active ? "Ładowanie…" : ep.label}
+							</button>
+						);
+					})}
 				</div>
 
-				<ul className="mt-4 grid gap-2">
-					{items.map((t) => (
-						<li key={t.id} className="rounded-xl border p-3 bg-slate-50">
-							<span className="text-sm text-slate-700">#{t.id}</span>
-							<div className="font-medium">{t.title}</div>
-						</li>
-					))}
-				</ul>
+				<div className="mt-3 text-sm text-slate-600 flex flex-wrap gap-3">
+					{selected && (
+						<>
+							<span className="font-medium">
+								Endpoint: <code className="bg-slate-100 px-1 rounded">{selected}</code>
+							</span>
+							{status !== null && <span>Status: {status}</span>}
+							{durationMs !== null && <span>Czas: {durationMs} ms</span>}
+						</>
+					)}
+					{error && <span className="text-red-600">{error}</span>}
+				</div>
 
-				{!loading && items.length === 0 && !error && <p className="text-sm text-slate-500 mt-3">Brak danych — kliknij przycisk powyżej.</p>}
+				{!loading && !error && data == null && <p className="text-sm text-slate-500 mt-4">Wybierz jeden z endpointów powyżej, aby pobrać i wyświetlić odpowiedź.</p>}
+
+				{data != null && <ResponseView value={data} />}
 			</div>
 		</section>
 	);
@@ -4020,7 +4123,7 @@ export default function Landing() {
 		<section className="grid gap-6">
 			<div className="rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-8 text-white">
 				<h1 className="text-3xl md:text-4xl font-bold">Witaj w aplikacji starter</h1>
-				<p className="mt-2 opacity-90">React + Vite + Tailwind 4 + React Router. 3 podstrony i przykład wywołania API.</p>
+				<p className="mt-2 opacity-90">Uwaga: to tylko prototyp wywołujący API!</p>
 				<div className="mt-6 flex gap-3">
 					<Link to="/wykresy" className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl">
 						Zobacz wykresy
@@ -4032,10 +4135,10 @@ export default function Landing() {
 			</div>
 
 			<div className="grid md:grid-cols-3 gap-4">
-				{["Szybki", "Nowoczesny", "Minimalny"].map((t) => (
+				{["Prototyp", "API", "React"].map((t) => (
 					<div key={t} className="rounded-2xl border bg-white p-5 shadow-sm">
 						<h3 className="font-semibold">{t}</h3>
-						<p className="text-sm text-slate-600 mt-1">Wykorzystuje najnowsze wersje bibliotek i proste style Tailwinda.</p>
+						<p className="text-sm text-slate-600 mt-1">Lorem ipsum dolor sit amet.</p>
 					</div>
 				))}
 			</div>
