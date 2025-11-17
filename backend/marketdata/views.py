@@ -7,10 +7,7 @@ from .services.BinanceAPIService import BinanceAPIService
 from .services.FredAPIService import FredAPIService
 from .services.CoinmetricsAPIService import CoinmetricsAPIService
 from .services.StooqAPIService import StooqAPIService
-from .services.HistoricalDataService import (
-    fetch_multi_symbol_df_excluding,
-    generate_parquet_file,
-)
+from .services.HistoricalDataService import HistoricalDataService
 
 class BinanceTestView(APIView):
     def get(self, request, *args, **kwargs):
@@ -74,15 +71,16 @@ class HistoricalDataView(APIView):
             "yes",
             "y",
         )
+        service = HistoricalDataService()
         try:
             if parquet_flag:
-                generate_parquet_file(
+                service.generate_parquet_file(
                     years_back=years_back,
                     filename=filename,
                     excluded_cols=excluded_cols or None,
                 )
                 return Response({"status": "SUCCESS"}, status=status.HTTP_200_OK)
-            df = fetch_multi_symbol_df_excluding(
+            df = service.fetch_multi_symbol_df_excluding(
                 years_back=years_back,
                 excluded_cols=excluded_cols or None,
             )
