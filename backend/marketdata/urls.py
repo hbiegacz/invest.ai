@@ -7,4 +7,5 @@ urlpatterns = [
     path('stooq-test/', views.StooqTestView.as_view(), name='stooq-test'),
     path('coinmetrics-test/', views.CoinmetricsTestView.as_view(), name='coinmetrics-test'),
     path('historical-data/', views.HistoricalDataView.as_view(), name='historical-data'),
+    path('get-historical-data/', views.ChartDataView.as_view(), name='get-historical-data'),
 ]

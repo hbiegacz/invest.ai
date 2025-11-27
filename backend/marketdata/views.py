@@ -8,6 +8,7 @@ from .services.FredAPIService import FredAPIService
 from .services.CoinmetricsAPIService import CoinmetricsAPIService
 from .services.StooqAPIService import StooqAPIService
 from .services.HistoricalDataService import HistoricalDataService
+from .services.DataReaderService import DataReaderService
 
 class BinanceTestView(APIView):
     def get(self, request, *args, **kwargs):
@@ -90,4 +91,50 @@ class HistoricalDataView(APIView):
             return Response(
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+            
+
+class ChartDataView(APIView):
+    """
+    Endpoint for retrieving data form our historical data parquet file.
+    Query parameters:
+    - metrics: comma-separated list of columns (e.g., 'close_btc,volume_eth')
+    - refresh: 'true' to force regeneration of the data file
+    
+    Example: /marketdata/get-historical-data/?metrics=close_btc,volume_btc,low_btc,open_btc
+    """
+    def get(self, request, *args, **kwargs):
+        metrics_param = request.query_params.get("metrics", "")
+        refresh_param = request.query_params.get("refresh", "").lower() in ("true", "1", "yes")
+
+        if not metrics_param:
+            return Response(
+                {"error": "Parameter 'metrics' is required (e.g. ?metrics=close_btc,volume_eth)"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        requested_metrics = [m.strip() for m in metrics_param.split(",") if m.strip()]
+
+        service = DataReaderService()
+        try:
+            data = service.get_market_data(
+                requested_metrics=requested_metrics,
+                force_refresh=refresh_param
+            )
+            return Response(data, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except RuntimeError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except Exception as e:
+            return Response(
+                {"error": "An unexpected error occurred", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
