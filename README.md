@@ -53,7 +53,7 @@ Do tego, pozostałe API mają rozsądne limity, które też pozwolą wyświetli�
 -   React.js na frontend
 -   Django na backend
 -   SQLite na DB
--   Kilka modeli ML do przetestowania (więcej w sekcji o eksperymentach) - biblioteka TensorFlow + Sklearn
+-   Kilka modeli ML do przetestowania (więcej w sekcji o eksperymentach) - biblioteka TensorFlow + Sklearn oraz Darts
 -   Docker
 -   Jira
 
@@ -61,9 +61,9 @@ Do tego, pozostałe API mają rozsądne limity, które też pozwolą wyświetli�
 
 Przetestowanie różnych modeli:
 
--   TFT - potencjalnie najlepszy, ale też najtrudniejszy w implementacji
+-   Linear Regression - jest najprostszy
 -   Random Forest - bardzo dobry do wielu zadań i stosunkowo prosty w implementacji
--   XGBoost - najlepiej radzi sobie z wykryciem niewielkiego wpływu
+-   TFT - potencjalnie najlepszy, ale też najtrudniejszy w implementacji
 
 -   testowanie sposobu mierzenia jakości modelu (musimy zastanowić się nad sposobem mierzenia)
 
@@ -115,3 +115,34 @@ Zadania są podzielone na cztery sprinty, opisane w pliku gantt_chart.png:
 
 -   Jak mierzyć błąd modelu ML przy badaniu wpływu jednego parametru na inny?
 -   Jaki byłby rozsądny cel skuteczności? Mocno powiązane ze sposobem mierzenia.
+
+## Plan na tworzenie modeli i podejście
+
+Mamy już potrzebne dane: cena BTC, ETH, BNB, XRP, SPX, GDP, UNRATE, w kompatybilnym formacie danych.
+
+### Ustalmy najpierw kilka ważnych szczegółów. Co będziemy przewidywać, jak to ocenimy i z czym to porównamy.
+
+1. Będziemy przewidywać cenę BTC w dniu t na podstawie danych historycznych (t-n), gdzie n to liczba dni, na jakie patrzymy wstecz. Można go wywołać k razy, żeby przewidzieć na k dni do przodu.
+
+2. Trzeba rozważyć, czy może zamiast przewidywać cenę, nie przewidzieć zwrotu z BTC? To może być odporne na wysokość ceny startowej i skupić się na wahaniach cen. (Albo log(zwrot), bo z jakiegoś powodu ML lubi logarytmy). Warto też sprawdzić kwadrat.
+
+3. Będziemy porównywać predykcję z danymi prawdziwymi i na tej podstawie zmierzymy MAE albo RMSE. Gdyby model sobie nie radził, zawsze możemy przejść też na po prostu mierzenie kierunku (spadek czy wzrost). Można sprawdzać kierunek korygowany o prowizję (małe zmiany są tak małe, że kierunek nie ma znaczenia)
+
+4. Na wykres świeczkowy nałożymy po prostu przewidywania modelu, żeby użytkownik mógł je łatwo zinterpretować.
+
+### A oto modele, jakie utworzymy:
+
+0. Naive model. Będzie po prostu przepisywał wartość z dnia poprzedniego. To będzie baseline, który musi być pobity przez każdy model.
+
+1. Linear regression. Featurami będą historyczne wartości btc oraz wybranego parametru poukładane w sekwencje. Sprawdzimy różne parametry i zmierzymy sobie ich wpływ na trafność wyniku.
+
+2. Random Forest. Zrobimy dla niego to samo co dla Linear Regression. Zakładam, że jego nieliniowość sprawi, że będzie znacznie lepszy, na jego podstawie dopasujemy format przekazywania modelowi danych, otrzymywanego wyniku i sposobu mierzenia błędu.
+
+3. LSTM. Najprostszy i najlepiej udokumentowany model sekwencyjny - większe prawdopodobieństwo na to, że się uda, niż TFT.
+
+4. TFT z użyciem biblioteki Darts. TFT podobno jest najlepszym modelem do radzenia sobie z sekwencjami, stąd wybór.
+
+Notatki
+
+-   dodawanie dodatkowych wykresów w trybie preview
+-   korelacja

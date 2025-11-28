@@ -1,133 +1,147 @@
 import React from "react";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, TimeScale, TimeSeriesScale, Tooltip, Legend, type ChartOptions } from "chart.js";
+import zoomPlugin from "chartjs-plugin-zoom";
 import "chartjs-adapter-date-fns";
 import { Chart } from "react-chartjs-2";
 import { CandlestickController, CandlestickElement } from "chartjs-chart-financial";
 
-ChartJS.register(TimeScale, TimeSeriesScale, LinearScale, BarElement, CategoryScale, CandlestickController, CandlestickElement, Tooltip, Legend);
-
-type Endpoint = { key: string; label: string };
+ChartJS.register(TimeScale, TimeSeriesScale, LinearScale, BarElement, CategoryScale, CandlestickController, CandlestickElement, Tooltip, Legend, zoomPlugin);
 
 const API_BASE = "http://localhost:8000/marketdata";
 
-const ENDPOINTS: Endpoint[] = [
-	{ key: "binance-test", label: "Binance" },
-	{ key: "fred-test", label: "FRED" },
-	{ key: "stooq-test", label: "Stooq" },
-	{ key: "coinmetrics-test", label: "CoinMetrics" },
-];
-
-// Dane do wykresów
-
-type ChartSeriesKey = "binance" | "fred" | "stooq" | "coinmetrics";
-type BarSeriesKey = "fred" | "stooq" | "coinmetrics";
-
-const BAR_KEYS: BarSeriesKey[] = ["fred", "stooq", "coinmetrics"];
+type HistoricalRow = {
+	open_time: number | string;
+	open_btc: number;
+	high_btc: number;
+	low_btc: number;
+	close_btc: number;
+} & Record<string, number | string | null>;
 
 type CandlePoint = {
-	x: number; // timestamp w ms
+	x: number;
 	o: number;
 	h: number;
 	l: number;
 	c: number;
 };
 
-type ChartSeriesValue = { type: "candles"; data: CandlePoint[] } | { type: "bars"; data: number[] };
-
-const CHART_SERIES_LABELS: Record<ChartSeriesKey, string> = {
-	binance: "Binance - świeczki BTC (przykład)",
-	fred: "FRED - przykładowe dane",
-	stooq: "Stooq - przykładowe dane",
-	coinmetrics: "CoinMetrics - przykładowe dane",
+type MetricPoint = {
+	x: number;
+	y: number;
 };
 
-// Dane przykładowe
-const BINANCE_CANDLES: CandlePoint[] = [
-	{
-		x: new Date("2025-01-01").getTime(),
-		o: 42000.5,
-		h: 43010,
-		l: 41850,
-		c: 42890.2,
-	},
-	{
-		x: new Date("2025-01-02").getTime(),
-		o: 42890.2,
-		h: 43500,
-		l: 42500.5,
-		c: 43210,
-	},
-	{
-		x: new Date("2025-01-03").getTime(),
-		o: 43210,
-		h: 43750,
-		l: 43000,
-		c: 43580.7,
-	},
-	{
-		x: new Date("2025-01-04").getTime(),
-		o: 43580.7,
-		h: 44020,
-		l: 43310,
-		c: 43850.1,
-	},
-	{
-		x: new Date("2025-01-05").getTime(),
-		o: 43850.1,
-		h: 44500,
-		l: 43600,
-		c: 44210.4,
-	},
+type MetricKey = "close_btc" | "volume_btc" | "close_eth" | "volume_eth" | "close_bnb" | "volume_bnb" | "close_xrp" | "volume_xrp" | "close_spx" | "volume_spx" | "gdp" | "unrate";
+
+const METRICS: { key: MetricKey; label: string }[] = [
+	{ key: "close_btc", label: "BTC - close" },
+	{ key: "volume_btc", label: "BTC - volume" },
+	{ key: "close_eth", label: "ETH - close" },
+	{ key: "volume_eth", label: "ETH - volume" },
+	{ key: "close_bnb", label: "BNB - close" },
+	{ key: "volume_bnb", label: "BNB - volume" },
+	{ key: "close_xrp", label: "XRP - close" },
+	{ key: "volume_xrp", label: "XRP - volume" },
+	{ key: "close_spx", label: "S&P 500 - close_spx" },
+	{ key: "volume_spx", label: "S&P 500 - volume_spx" },
+	{ key: "gdp", label: "GDP (USA)" },
+	{ key: "unrate", label: "Unemployment rate (USA)" },
 ];
 
-const CHART_SERIES: Record<ChartSeriesKey, ChartSeriesValue> = {
-	binance: {
-		type: "candles",
-		data: BINANCE_CANDLES,
-	},
-	fred: {
-		type: "bars",
-		data: [5, 14, 9, 12, 3, 10, 7],
-	},
-	stooq: {
-		type: "bars",
-		data: [3, 6, 9, 12, 9, 6, 3],
-	},
-	coinmetrics: {
-		type: "bars",
-		data: [10, 11, 8, 15, 13, 9, 12],
-	},
-};
-
-const ML_MODELS = [
-	{ key: "baseline", label: "Model bazowy" },
-	{ key: "lstm", label: "LSTM" },
-	{ key: "random-forest", label: "Random Forest" },
-];
-
-function ResponseView({ value }: { value: any }) {
-	if (value === null || value === undefined) return null;
-	if (typeof value === "string") {
-		return <pre className="mt-3 max-h-[480px] overflow-auto rounded-xl bg-slate-900 p-4 text-slate-100 text-sm">{value}</pre>;
-	}
-	return <pre className="mt-3 max-h-[480px] overflow-auto rounded-xl bg-slate-900 p-4 text-slate-100 text-sm">{JSON.stringify(value, null, 2)}</pre>;
+function parseTimestamp(value: number | string): number {
+	if (typeof value === "number") return value;
+	return new Date(value).getTime();
 }
 
-// Wykres btc
-function BinanceCandleChart() {
-	const series = CHART_SERIES.binance;
-	if (series.type !== "candles") return null;
+function buildCandleSeries(rows: HistoricalRow[]): CandlePoint[] {
+	return rows
+		.map((row) => ({
+			x: parseTimestamp(row.open_time),
+			o: Number(row.open_btc),
+			h: Number(row.high_btc),
+			l: Number(row.low_btc),
+			c: Number(row.close_btc),
+		}))
+		.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.o) && Number.isFinite(point.h) && Number.isFinite(point.l) && Number.isFinite(point.c));
+}
 
-	const candles = series.data;
-	console.log("Candles data:", candles);
+function buildMetricSeries(rows: HistoricalRow[], metricKey: MetricKey): MetricPoint[] {
+	return rows
+		.map((row) => {
+			const x = parseTimestamp(row.open_time);
+			const raw = row[metricKey];
+			const y = typeof raw === "string" ? Number(raw) : (raw as number);
+			return { x, y };
+		})
+		.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+}
 
+type BuildZoomOptionsParams = {
+	syncEnabled: boolean;
+	getTargetChart: () => ChartJS | null;
+	syncingRef: React.MutableRefObject<boolean>;
+};
+
+function buildZoomOptions(params: BuildZoomOptionsParams) {
+	const { syncEnabled, getTargetChart, syncingRef } = params;
+
+	function handleSync(ctx: { chart: any }) {
+		if (!syncEnabled) return;
+		if (syncingRef.current) return;
+
+		const sourceChart = ctx.chart as any;
+		const scale = sourceChart.scales?.x;
+		if (!scale) return;
+
+		const min = scale.min;
+		const max = scale.max;
+		if (typeof min !== "number" || typeof max !== "number") return;
+
+		const target = getTargetChart();
+		if (!target) return;
+
+		syncingRef.current = true;
+		try {
+			(target as any).zoomScale("x", { min, max }, "none");
+		} finally {
+			syncingRef.current = false;
+		}
+	}
+
+	return {
+		pan: {
+			enabled: true,
+			mode: "x" as const,
+			onPan: handleSync,
+		},
+		zoom: {
+			mode: "x" as const,
+			wheel: {
+				enabled: true,
+			},
+			pinch: {
+				enabled: true,
+			},
+			onZoom: handleSync,
+		},
+		limits: {
+			x: { min: "original" as const, max: "original" as const },
+		},
+	};
+}
+
+type BinanceCandleChartProps = {
+	candles: CandlePoint[];
+	zoomOptions: any;
+	chartRef: React.RefObject<ChartJS<"candlestick">>;
+};
+
+function BinanceCandleChart({ candles, zoomOptions, chartRef }: BinanceCandleChartProps) {
 	const data = {
 		datasets: [
 			{
-				label: "BTCUSDT (Binance, przykładowe dane)",
+				label: "BTCUSDC - świece dzienne",
 				type: "candlestick" as const,
 				data: candles,
-				backgroundColor: "rgba(34, 197, 94, 0.85)",
 			},
 		],
 	};
@@ -135,6 +149,22 @@ function BinanceCandleChart() {
 	const options: ChartOptions<"candlestick"> = {
 		responsive: true,
 		maintainAspectRatio: false,
+		animation: false,
+		transitions: {
+			zoom: { animation: { duration: 0 } },
+			pan: { animation: { duration: 0 } },
+		},
+		scales: {
+			x: {
+				type: "time",
+				time: {
+					unit: "day",
+				},
+			},
+			y: {
+				beginAtZero: false,
+			},
+		},
 		plugins: {
 			legend: {
 				position: "top",
@@ -143,40 +173,36 @@ function BinanceCandleChart() {
 				mode: "index",
 				intersect: false,
 			},
+			zoom: zoomOptions as any,
 		},
 	};
 
 	return (
 		<div className="rounded-2xl border bg-white p-6 shadow-sm">
-			<h4 className="font-medium mb-4">Bitcoin (świeczki)</h4>
+			<h4 className="font-medium mb-4">Bitcoin (świece dzienne, Binance)</h4>
 			<div className="h-64">
-				<Chart type="candlestick" data={data} options={options} />
+				<Chart ref={chartRef} type="candlestick" data={data} options={options} />
 			</div>
 		</div>
 	);
 }
 
-// Wykres słupkowy
-
-type BarChartCardProps = {
-	title: string;
-	selectedKey: BarSeriesKey;
-	onChangeKey: (key: BarSeriesKey) => void;
+type MetricBarChartProps = {
+	series: MetricPoint[];
+	metricKey: MetricKey;
+	zoomOptions: any;
+	chartRef: React.RefObject<ChartJS<"bar">>;
+	onMetricChange: (key: MetricKey) => void;
 };
 
-function BarChartCard({ title, selectedKey, onChangeKey }: BarChartCardProps) {
-	const series = CHART_SERIES[selectedKey];
-	if (series.type !== "bars") return null;
-
-	const values = series.data;
-	const labels = values.map((_, i) => `${i + 1}`);
+function MetricBarChart({ series, metricKey, zoomOptions, chartRef, onMetricChange }: MetricBarChartProps) {
+	const metricMeta = METRICS.find((m) => m.key === metricKey);
 
 	const data = {
-		labels,
 		datasets: [
 			{
-				label: CHART_SERIES_LABELS[selectedKey],
-				data: values,
+				label: metricMeta?.label ?? metricKey,
+				data: series.map((p) => ({ x: p.x, y: p.y })),
 				backgroundColor: "rgba(88, 80, 241, 0.85)",
 			},
 		],
@@ -185,153 +211,163 @@ function BarChartCard({ title, selectedKey, onChangeKey }: BarChartCardProps) {
 	const options: ChartOptions<"bar"> = {
 		responsive: true,
 		maintainAspectRatio: false,
+		animation: false,
+		transitions: {
+			zoom: { animation: { duration: 0 } },
+			pan: { animation: { duration: 0 } },
+		},
+		parsing: false,
+		scales: {
+			x: {
+				type: "time",
+				time: { unit: "day" },
+			},
+			y: {
+				beginAtZero: false,
+			},
+		},
 		plugins: {
 			legend: {
 				position: "top",
 			},
-		},
-		scales: {
-			x: {
-				type: "category",
+			tooltip: {
+				mode: "index",
+				intersect: false,
 			},
-			y: {
-				beginAtZero: true,
-			},
+			zoom: zoomOptions as any,
 		},
 	};
 
 	return (
 		<div className="rounded-2xl border bg-white p-6 shadow-sm">
-			<div className="flex items-center justify-between gap-3 mb-4">
-				<h4 className="font-medium">{title}</h4>
-				<select className="rounded-xl border px-3 py-1 text-sm bg-white" value={selectedKey} onChange={(e) => onChangeKey(e.target.value as BarSeriesKey)}>
-					{BAR_KEYS.map((key) => (
-						<option key={key} value={key}>
-							{CHART_SERIES_LABELS[key]}
+			<div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+				<h4 className="font-medium">Drugi wykres (dowolny parametr z endpointu)</h4>
+				<select className="rounded-xl border px-3 py-1 text-sm bg-white" value={metricKey} onChange={(e) => onMetricChange(e.target.value as MetricKey)}>
+					{METRICS.map((m) => (
+						<option key={m.key} value={m.key}>
+							{m.label}
 						</option>
 					))}
 				</select>
 			</div>
 
 			<div className="h-64">
-				<Chart type="bar" data={data} options={options} />
+				<Chart ref={chartRef} type="bar" data={data} options={options} />
 			</div>
 		</div>
 	);
 }
 
 export default function Analysis() {
+	const [rows, setRows] = React.useState<HistoricalRow[]>([]);
 	const [loading, setLoading] = React.useState(false);
 	const [error, setError] = React.useState<string | null>(null);
-	const [data, setData] = React.useState<any>(null);
-	const [selected, setSelected] = React.useState<string | null>(null);
-	const [status, setStatus] = React.useState<number | null>(null);
-	const [durationMs, setDurationMs] = React.useState<number | null>(null);
 
-	const [barSeriesKey, setBarSeriesKey] = React.useState<BarSeriesKey>("fred");
+	const [metricKey, setMetricKey] = React.useState<MetricKey>("close_btc");
 	const [selectedModel, setSelectedModel] = React.useState<string>("baseline");
+	const [syncZoom, setSyncZoom] = React.useState(true);
 
-	async function callEndpoint(key: string) {
-		setSelected(key);
-		setLoading(true);
-		setError(null);
-		setStatus(null);
-		setDurationMs(null);
-		setData(null);
+	const candleChartRef = React.useRef<ChartJS<"candlestick"> | null>(null);
+	const metricChartRef = React.useRef<ChartJS<"bar"> | null>(null);
+	const syncingRef = React.useRef(false);
 
-		const url = `${API_BASE}/${key}/`;
-		try {
-			const t0 = performance.now();
-			const res = await fetch(url);
-			const t1 = performance.now();
-			setDurationMs(Math.round(t1 - t0));
-			setStatus(res.status);
+	React.useEffect(() => {
+		let cancelled = false;
 
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		async function load() {
+			setLoading(true);
+			setError(null);
 
-			const ct = res.headers.get("content-type") || "";
-			const body = ct.includes("application/json") ? await res.json() : await res.text();
-			setData(body);
-		} catch (e: any) {
-			setError(e?.message || "Błąd");
-		} finally {
-			setLoading(false);
+			try {
+				const res = await fetch(`${API_BASE}/historical-data/?years_back=2`);
+				if (!res.ok) {
+					throw new Error(`HTTP ${res.status}`);
+				}
+				const json = await res.json();
+				if (!Array.isArray(json)) {
+					throw new Error("Nieoczekiwany format odpowiedzi z API");
+				}
+				if (!cancelled) {
+					setRows(json as HistoricalRow[]);
+				}
+			} catch (e: any) {
+				if (!cancelled) {
+					setError(e?.message || "Błąd podczas pobierania danych");
+				}
+			} finally {
+				if (!cancelled) {
+					setLoading(false);
+				}
+			}
 		}
-	}
 
-	function handleRunModel() {
-		// TODO: dodać wywołanie modelu ML
-	}
+		load();
+
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
+	const candles = React.useMemo(() => buildCandleSeries(rows), [rows]);
+	const metricSeries = React.useMemo(() => buildMetricSeries(rows, metricKey), [rows, metricKey]);
+
+	const candleZoomOptions = React.useMemo(
+		() =>
+			buildZoomOptions({
+				syncEnabled: syncZoom,
+				getTargetChart: () => metricChartRef.current as unknown as ChartJS,
+				syncingRef,
+			}),
+		[syncZoom]
+	);
+
+	const metricZoomOptions = React.useMemo(
+		() =>
+			buildZoomOptions({
+				syncEnabled: syncZoom,
+				getTargetChart: () => candleChartRef.current as unknown as ChartJS,
+				syncingRef,
+			}),
+		[syncZoom]
+	);
+
+	function handleRunModel() {}
 
 	return (
 		<section className="grid gap-6">
 			<h2 className="text-2xl font-bold">Analiza</h2>
 
-			{/* Karta z wywołaniem API, deprecated */}
-			<div className="rounded-2xl border bg-white p-6 shadow-sm">
-				<div className="flex flex-wrap items-center gap-2">
-					{ENDPOINTS.map((ep) => {
-						const active = selected === ep.key;
-						return (
-							<button
-								key={ep.key}
-								onClick={() => callEndpoint(ep.key)}
-								className={`px-4 py-2 rounded-xl border transition ${active ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-900 hover:bg-slate-50 border-slate-200"} disabled:opacity-50`}
-								disabled={loading && active}
-								title={`${API_BASE}/${ep.key}/`}>
-								{loading && active ? "Ładowanie…" : ep.label}
-							</button>
-						);
-					})}
-				</div>
-
-				<div className="mt-3 text-sm text-slate-600 flex flex-wrap gap-3">
-					{selected && (
-						<>
-							<span className="font-medium">
-								Endpoint: <code className="bg-slate-100 px-1 rounded">{selected}</code>
-							</span>
-							{status !== null && <span>Status: {status}</span>}
-							{durationMs !== null && <span>Czas: {durationMs} ms</span>}
-						</>
-					)}
-					{error && <span className="text-red-600">{error}</span>}
-				</div>
-
-				{!loading && !error && data == null && <p className="text-sm text-slate-500 mt-4">Wybierz jeden z endpointów powyżej, aby pobrać i wyświetlić odpowiedź.</p>}
-
-				{data != null && <ResponseView value={data} />}
-			</div>
-
-			{/* Karta z wykresami + model ML */}
-			<div className="rounded-2xl border bg-white p-6 shadow-sm">
-				<div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-					<h3 className="text-lg font-semibold">Wykresy</h3>
-
-					<div className="flex items-center gap-3 text-sm">
-						<div className="flex items-center gap-2">
-							<span className="text-slate-600">Model ML:</span>
-							<select className="rounded-xl border px-3 py-1 bg-white" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
-								{ML_MODELS.map((m) => (
-									<option key={m.key} value={m.key}>
-										{m.label}
-									</option>
-								))}
-							</select>
-						</div>
-
-						<button type="button" onClick={handleRunModel} className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-800 transition">
-							Uruchom model
-						</button>
+			<div className="rounded-2xl border bg-white p-6 shadow-sm flex flex-wrap items-center justify-between gap-4">
+				<div className="flex flex-wrap items-center gap-3 text-sm">
+					<div className="flex items-center gap-2">
+						<span className="text-slate-600">Model ML:</span>
+						<select className="rounded-xl border px-3 py-1 bg-white" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
+							<option value="baseline">Model bazowy</option>
+							<option value="lstm">LSTM</option>
+							<option value="random-forest">Random Forest</option>
+						</select>
 					</div>
+					<label className="inline-flex items-center gap-2 text-sm">
+						<input type="checkbox" className="h-4 w-4" checked={syncZoom} onChange={(e) => setSyncZoom(e.target.checked)} />
+						<span>Synchronizuj zoom obu wykresów</span>
+					</label>
 				</div>
 
-				<div className="grid gap-6">
-					<BinanceCandleChart />
-
-					<BarChartCard title="Wykres 2" selectedKey={barSeriesKey} onChangeKey={setBarSeriesKey} />
-				</div>
+				<button type="button" onClick={handleRunModel} className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-800 transition">
+					Uruchom model
+				</button>
 			</div>
+
+			{loading && <p className="text-sm text-slate-500">Ładowanie danych historycznych…</p>}
+			{error && <p className="text-sm text-red-600">{error}</p>}
+			{!loading && !error && rows.length === 0 && <p className="text-sm text-slate-500">Brak danych z endpointu historical-data.</p>}
+
+			{!loading && !error && rows.length > 0 && (
+				<div className="grid gap-6">
+					<BinanceCandleChart candles={candles} zoomOptions={candleZoomOptions} chartRef={candleChartRef} />
+					<MetricBarChart series={metricSeries} metricKey={metricKey} zoomOptions={metricZoomOptions} chartRef={metricChartRef} onMetricChange={setMetricKey} />
+				</div>
+			)}
 		</section>
 	);
 }
