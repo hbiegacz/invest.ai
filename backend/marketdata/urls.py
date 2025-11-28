@@ -8,4 +8,5 @@ urlpatterns = [
     path('coinmetrics-test/', views.CoinmetricsTestView.as_view(), name='coinmetrics-test'),
     path('historical-data/', views.HistoricalDataView.as_view(), name='historical-data'),
     path('get-historical-data/', views.RequestSpecificDataView.as_view(), name='get-historical-data'),
+    path('naive-model/', views.NaiveModelView.as_view(), name='naive-model'),
 ]

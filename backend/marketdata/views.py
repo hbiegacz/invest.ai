@@ -9,6 +9,7 @@ from .services.CoinmetricsAPIService import CoinmetricsAPIService
 from .services.StooqAPIService import StooqAPIService
 from .services.HistoricalDataService import HistoricalDataService
 from .services.DataReaderService import DataReaderService
+from .services.ModelService import ModelService
 
 class BinanceTestView(APIView):
     def get(self, request, *args, **kwargs):
@@ -137,4 +138,26 @@ class RequestSpecificDataView(APIView):
         except Exception as e:
             return Response({"error": "An unexpected error occurred", "details": str(e)},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class NaiveModelView(APIView):
+    def get(self, request, *args, **kwargs):
+        refresh_flag = request.query_params.get("refresh", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "y",
+        )
+        service = ModelService()
+        try:
+            close_btc = service.naive(
+                force_refresh=refresh_flag,
+            )
+            return Response({"close_btc": close_btc}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {"error": "Unexpected error in naive model", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
