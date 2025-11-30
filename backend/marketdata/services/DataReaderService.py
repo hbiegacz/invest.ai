@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from django.conf import settings
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 
 class DataReaderService:

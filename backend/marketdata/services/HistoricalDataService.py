@@ -257,7 +257,7 @@ class HistoricalDataService:
     def generate_parquet_file(
         self,
         years_back=None,
-        filename="data.parquet",
+        filename="historical_data.parquet",
         excluded_cols=None,
     ):
         full_df = self.fetch_multi_symbol_df(years_back=years_back)

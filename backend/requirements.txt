@@ -5,3 +5,5 @@ python-dotenv==1.2.1
 django-cors-headers>=4.0.0
 pandas
 pyarrow
+joblib
+scikit-learn

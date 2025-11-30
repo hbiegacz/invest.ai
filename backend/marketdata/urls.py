@@ -9,4 +9,5 @@ urlpatterns = [
     path('historical-data/', views.HistoricalDataView.as_view(), name='historical-data'),
     path('get-historical-data/', views.RequestSpecificDataView.as_view(), name='get-historical-data'),
     path('naive-model/', views.NaiveModelView.as_view(), name='naive-model'),
+    path('linear-regression-model/', views.LinearRegressionModelView.as_view(), name='linear-regression-model'),
 ]

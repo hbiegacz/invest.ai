@@ -28,7 +28,7 @@ class FredTestView(APIView):
             data = service.get_basic_economic_data()
             return Response(data, status=status.HTTP_200_OK)
         except requests.RequestException as e:
-             return Response({"error": "Could not fetch data from Stooq API", "details": str(e)},
+             return Response({"error": "Could not fetch data from FRED API", "details": str(e)},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
         
 class StooqTestView(APIView):
@@ -61,7 +61,7 @@ class HistoricalDataView(APIView):
                 {"error": "years_back must be an integer"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        filename = request.query_params.get("filename", "data.parquet")
+        filename = request.query_params.get("filename", "historical_data.parquet")
         raw_excludes = request.query_params.getlist("exclude")
         excluded_cols = []
         for item in raw_excludes:
@@ -159,5 +159,36 @@ class NaiveModelView(APIView):
         except Exception as e:
             return Response(
                 {"error": "Unexpected error in naive model", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        
+class LinearRegressionModelView(APIView):
+    def get(self, request, *args, **kwargs):
+        refresh_flag = request.query_params.get("refresh", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "y",
+        )
+        service = ModelService()
+        try:
+            close_btc = service.linear_regression(force_refresh=refresh_flag)
+            return Response({"close_btc": close_btc}, status=status.HTTP_200_OK)
+        except FileNotFoundError as e:
+            return Response(
+                {
+                    "error": "Trained linear regression model not found.",
+                    "details": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {
+                    "error": "Unexpected error in linear regression BTC model.",
+                    "details": str(e),
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
