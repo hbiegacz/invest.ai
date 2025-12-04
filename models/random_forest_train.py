@@ -27,6 +27,23 @@
 #   mae: 0.024311851021388362
 #   rmse: 0.04379106572596224
 
+# Best hyperparameters:
+#   max_depth: 3
+#   min_samples_leaf: 500
+#   max_features: log2
+#   n_estimators: 50
+#   max_samples: None
+
+# Metrics on test set:
+#   mae: 0.016980331120902255
+#   rmse: 0.02319835740051828
+#   n_train: 1670
+#   n_test: 418
+
+# Naive baseline (ret_tomorrow = 0):
+#   mae: 0.024311851021388362
+#   rmse: 0.04379106572596224
+
 
 import argparse
 from pathlib import Path
@@ -86,11 +103,11 @@ TARGET_COLUMN = "ret_btc_next"
 # GRID_MAX_SAMPLES = [None, 0.7, 0.5]
 # GRID_MIN_SAMPLES_SPLIT = [2, 5, 10]
 
-GRID_MAX_DEPTH = [5, 7, 9, 11, 13, 15]
-GRID_MIN_SAMPLES_LEAF = [1, 2, 5, 10, 20, 50, 100, 200]
-GRID_MAX_FEATURES = ["sqrt", "log2", 0.7, 1.0]
-GRID_N_ESTIMATORS = [100, 200, 300]
-GRID_MAX_SAMPLES = [0.3, 0.5, 0.7]
+GRID_MAX_DEPTH = [3, 5, 7]
+GRID_MIN_SAMPLES_LEAF = [50, 100, 200, 500]
+GRID_MAX_FEATURES = ["sqrt", "log2"]
+GRID_N_ESTIMATORS = [50, 100]
+GRID_MAX_SAMPLES = [0.3, 0.5, None]
 
 
 def load_dataset():
