@@ -1,52 +1,32 @@
-# FEATURE_COLUMNS = [
-#     "open_btc",
-#     "high_btc",
-#     "low_btc",
-#     "close_btc",
-#     "open_eth",
-#     "high_eth",
-#     "low_eth",
-#     "close_eth",
-#     "open_bnb",
-#     "high_bnb",
-#     "low_bnb",
-#     "close_bnb",
-#     "open_xrp",
-#     "high_xrp",
-#     "low_xrp",
-#     "close_xrp",
-#     "volume_btc",
-#     "volume_eth",
-#     "volume_bnb",
-#     "volume_xrp",
-#     "num_trades_btc",
-#     "num_trades_eth",
-#     "num_trades_bnb",
-#     "num_trades_xrp",
-#     "open_spx",
-#     "high_spx",
-#     "low_spx",
-#     "close_spx",
-#     "volume_spx",
-#     "gdp",
-#     "unrate",
-# ]
+#   max_depth: 5
+#   min_samples_leaf: 200
+#   max_features: log2
+#   n_estimators: 100
+#   max_samples: 0.3
 
+# Metrics on test set:
+#   mae: 0.01660354576423444
+#   rmse: 0.023195566269251344
+#   n_train: 1670
+#   n_test: 418
 
-# - max_depth
-# - min_samples_leaf
-# - max_features
-# - n_estimators
-# - max_samples
+# max_depth: 3
+#   min_samples_leaf: 2
+#   max_features: sqrt
+#   n_estimators: 100
+#   max_samples: None
+#   min_samples_split: 2
 
-# - criterion
+# Metrics on test set:
+#   mae: 0.016980331120902255
+#   rmse: 0.02319835740051828
+#   n_train: 1670
+#   n_test: 418
 
+# Naive baseline (ret_tomorrow = 0):
+#   mae: 0.024311851021388362
+#   rmse: 0.04379106572596224
 
-# - n_jobs dla paralelizmu
-
-# - wyłączanie featurów
-
-# trening 1 - wszystko, default  mae: 0.020019812835128284 rmse: 0.026178989947603936
 
 import argparse
 from pathlib import Path
@@ -56,46 +36,61 @@ from joblib import dump
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import train_test_split
+from itertools import product
+
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DATA_PATH = ROOT_DIR / "backend" / "data" / "historical_data.parquet"
 DEFAULT_MODEL_PATH = ROOT_DIR / "backend" / "data" / "random_forest_btc.pkl"
 
 FEATURE_COLUMNS = [
-    # "open_btc",
-    # "high_btc",
-    # "low_btc",
+    "open_btc",
+    "high_btc",
+    "low_btc",
     "close_btc",
-    # "open_eth",
-    # "high_eth",
-    # "low_eth",
+    "open_eth",
+    "high_eth",
+    "low_eth",
     "close_eth",
-    # "open_bnb",
-    # "high_bnb",
-    # "low_bnb",
+    "open_bnb",
+    "high_bnb",
+    "low_bnb",
     "close_bnb",
-    # "open_xrp",
-    # "high_xrp",
-    # "low_xrp",
+    "open_xrp",
+    "high_xrp",
+    "low_xrp",
     "close_xrp",
-    # "volume_btc",
-    # "volume_eth",
-    # "volume_bnb",
-    # "volume_xrp",
-    # "num_trades_btc",
-    # "num_trades_eth",
-    # "num_trades_bnb",
-    # "num_trades_xrp",
-    # "open_spx",
-    # "high_spx",
-    # "low_spx",
-    # "close_spx",
-    # "volume_spx",
-    # "gdp",
-    # "unrate",
+    "volume_btc",
+    "volume_eth",
+    "volume_bnb",
+    "volume_xrp",
+    "num_trades_btc",
+    "num_trades_eth",
+    "num_trades_bnb",
+    "num_trades_xrp",
+    "open_spx",
+    "high_spx",
+    "low_spx",
+    "close_spx",
+    "volume_spx",
+    "gdp",
+    "unrate",
 ]
 
 TARGET_COLUMN = "ret_btc_next"
+
+# GRID_MAX_DEPTH = [3, 5, 7, 9]
+# GRID_MIN_SAMPLES_LEAF = [2, 5, 10]
+# GRID_MAX_FEATURES = [1.0, "sqrt", 0.3, 0.5]
+# GRID_N_ESTIMATORS = [100, 200, 400]
+# GRID_MAX_SAMPLES = [None, 0.7, 0.5]
+# GRID_MIN_SAMPLES_SPLIT = [2, 5, 10]
+
+GRID_MAX_DEPTH = [5, 7, 9, 11, 13, 15]
+GRID_MIN_SAMPLES_LEAF = [1, 2, 5, 10, 20, 50, 100, 200]
+GRID_MAX_FEATURES = ["sqrt", "log2", 0.7, 1.0]
+GRID_N_ESTIMATORS = [100, 200, 300]
+GRID_MAX_SAMPLES = [0.3, 0.5, 0.7]
 
 
 def load_dataset():
@@ -364,14 +359,14 @@ def parse_args():
     parser.add_argument(
         "--n-jobs",
         type=int,
-        default=None,
+        default=-1,
         help="Number of jobs to run in parallel. None means 1, -1 means all processors.",
     )
 
     parser.add_argument(
         "--random-state",
         type=int,
-        default=None,
+        default=42,
         help="Random seed for reproducibility.",
     )
 
@@ -411,12 +406,19 @@ def parse_args():
         help="Optional monotonic constraints as comma separated ints, e.g. '1,0,-1'.",
     )
 
+    parser.add_argument(
+        "--train",
+        action="store_true",
+        help="If set, train over all predefined hyperparameter combinations and save the best model.",
+    )
+
     return parser.parse_args()
 
 
 def main():
     """
-    Główna funkcja: ładuje dane, trenuje RandomForestRegressor, zapisuje model i wypisuje metryki.
+    Główna funkcja: ładuje dane, trenuje RandomForestRegressor (pojedynczy albo grid-search),
+    zapisuje model i wypisuje metryki.
     """
     args = parse_args()
 
@@ -424,6 +426,127 @@ def main():
     df = load_dataset()
     print(f"Dataset shape after preprocessing: {df.shape}")
 
+    # tryb GRID-SEARCH: --train
+    if args.train:
+        monotonic_cst = parse_monotonic_cst(args.monotonic_cst)
+
+        base_params = {
+            "criterion": args.criterion,
+            "min_weight_fraction_leaf": args.min_weight_fraction_leaf,
+            "max_leaf_nodes": args.max_leaf_nodes,
+            "min_impurity_decrease": args.min_impurity_decrease,
+            "bootstrap": args.bootstrap,
+            "oob_score": args.oob_score,
+            "n_jobs": args.n_jobs,
+            "random_state": args.random_state,
+            "verbose": args.verbose,
+            "warm_start": args.warm_start,
+            "ccp_alpha": args.ccp_alpha,
+            "monotonic_cst": monotonic_cst,
+        }
+
+        total_combos = (
+            len(GRID_MAX_DEPTH)
+            * len(GRID_MIN_SAMPLES_LEAF)
+            * len(GRID_MAX_FEATURES)
+            * len(GRID_N_ESTIMATORS)
+            * len(GRID_MAX_SAMPLES)
+            # * len(GRID_MIN_SAMPLES_SPLIT)
+        )
+        print(f"Running grid search over {total_combos} combinations...")
+
+        best_model = None
+        best_params = None
+        best_metrics = None
+        best_mae = float("inf")
+
+        combo_idx = 0
+        for (
+            max_depth,
+            min_samples_leaf,
+            max_features,
+            n_estimators,
+            max_samples,
+            # min_samples_split,
+        ) in product(
+            GRID_MAX_DEPTH,
+            GRID_MIN_SAMPLES_LEAF,
+            GRID_MAX_FEATURES,
+            GRID_N_ESTIMATORS,
+            GRID_MAX_SAMPLES,
+            # GRID_MIN_SAMPLES_SPLIT,
+        ):
+            combo_idx += 1
+            params = {
+                **base_params,
+                "max_depth": max_depth,
+                "min_samples_leaf": min_samples_leaf,
+                "max_features": max_features,
+                "n_estimators": n_estimators,
+                "max_samples": max_samples,
+                # "min_samples_split": min_samples_split,
+            }
+
+            print(
+                f"\n[{combo_idx}/{total_combos}] "
+                f"max_depth={max_depth}, "
+                f"min_samples_leaf={min_samples_leaf}, "
+                f"max_features={max_features}, "
+                f"n_estimators={n_estimators}, "
+                f"max_samples={max_samples}"
+                # f"min_samples_split={min_samples_split}"
+            )
+
+            model, metrics = train_model(
+                df,
+                test_size=args.test_size,
+                rf_params=params,
+            )
+
+            mae = metrics["mae"]
+            rmse = metrics["rmse"]
+            print(f"   -> MAE={mae:.6f}, RMSE={rmse:.6f}")
+
+            if mae < best_mae:
+                best_mae = mae
+                best_model = model
+                best_params = params
+                best_metrics = metrics
+                print("   (new best)")
+
+        if best_model is None:
+            raise RuntimeError("Grid search did not produce any model.")
+
+        output_path = Path(args.output)
+        save_model(best_model, output_path)
+
+        print("\n=== BEST MODEL FROM GRID SEARCH ===")
+        print(f"Saved to: {output_path}")
+        print("Best hyperparameters:")
+        for k in [
+            "max_depth",
+            "min_samples_leaf",
+            "max_features",
+            "n_estimators",
+            "max_samples",
+            # "min_samples_split",
+        ]:
+            print(f"  {k}: {best_params[k]}")
+
+        print("Metrics on test set:")
+        for k, v in best_metrics.items():
+            print(f"  {k}: {v}")
+
+        naive_metrics = compute_naive_metrics(df)
+        print("\nNaive baseline (ret_tomorrow = 0):")
+        for k, v in naive_metrics.items():
+            print(f"  {k}: {v}")
+
+        return  # koniec trybu --train
+
+    # =========================
+    # Tryb pojedynczego modelu (bez --train)
+    # =========================
     max_features = parse_optional_number_or_str(args.max_features)
     max_samples = parse_optional_number_or_str(args.max_samples)
     monotonic_cst = parse_monotonic_cst(args.monotonic_cst)
@@ -449,7 +572,7 @@ def main():
         "monotonic_cst": monotonic_cst,
     }
 
-    print("Training RandomForestRegressor...")
+    print("Training RandomForestRegressor (single config)...")
     model, metrics = train_model(
         df,
         test_size=args.test_size,
@@ -468,7 +591,6 @@ def main():
     print("\nNaive baseline (ret_tomorrow = 0):")
     for k, v in naive_metrics.items():
         print(f"  {k}: {v}")
-
 
 if __name__ == "__main__":
     main()
