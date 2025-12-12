@@ -50,6 +50,32 @@ Debug:
 - DEBUG_SAMPLES > 0 wypisze head/tail i statystyki featureów.
 """
 
+"""
+Moje wnioski (Adrian):
+1. Testowanie jest teraz uczciwsze.
+- wcześniej sprawdzaliśmy model tylko na jednym kawałku danych (ostatnie ~20%), więc mogliśmy trafić "łatwy" okres i wynik wyglądał lepiej niż w realu.
+- teraz robimy 5 testów po kolei w czasie (walk-forward), więc widać jak model radzi sobie w różnych okresach.
+
+2. Model ma tylko minimalną przewagę nad zgadywaniem "jutro = 0".
+- średnio MAE/RMSE wychodzi odrobinę lepiej niż baseline, ale różnice są bardzo małe i często giną w tym, że różne okresy rynku są po prostu inne.
+- czyli: jest lekki sygnał, ale nie jest to "mocny" model.
+
+3. Z kierunkiem (czy jutro plus czy minus) jest trochę lepiej niż baseline.
+- trafiamy znak ok. 52.7% vs 52.0% baseline.
+- to mały plus, ale też nie działa równo w każdym foldzie (czasem jest prawie losowo).
+
+4. Najwięcej informacji model bierze z innych rynków/krypto, a nie z makro.
+- ważne są zwroty ETH/BNB/XRP i SPX + ich wygładzenia (EWM), oraz trochę cech BTC (np. hl2, zmienność).
+- GDP/unrate w tej formie praktycznie nic nie wnoszą (część wygląda jak "zero sygnału").
+
+5. Wywalanie całych grup cech prawie nic nie zmienia wyniku.
+- jak usuniemy macro / volatility / ewm / spx, MAE pogarsza się tylko minimalnie.
+- to znaczy: sygnał jest rozproszony i słaby, a model i tak głównie "kręci się" wokół krótkoterminowych returnów.
+
+6. Uproszczenie (bez volume/trades) jest OK.
+- usunięcie volume/trades nie pogorszyło jakości, a upraszcza model i zmniejsza ryzyko dopasowania do szumu.
+"""
+
 from itertools import product
 from pathlib import Path
 
@@ -58,7 +84,8 @@ import pandas as pd
 from joblib import dump
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, TimeSeriesSplit
+from sklearn.inspection import permutation_importance
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -71,40 +98,7 @@ ALL_ASSETS = CRYPTO_ASSETS + INDEX_ASSETS
 
 TARGET_COLUMN = "ret_btc_next"
 
-FEATURE_COLUMNS = [
-    # Legacy raw-level features (do not remove):
-    # "open_btc",
-    # "high_btc",
-    # "low_btc",
-    # "close_btc",
-    # "open_eth",
-    # "high_eth",
-    # "low_eth",
-    # "close_eth",
-    # "open_bnb",
-    # "high_bnb",
-    # "low_bnb",
-    # "close_bnb",
-    # "open_xrp",
-    # "high_xrp",
-    # "low_xrp",
-    # "close_xrp",
-    # "volume_btc",
-    # "volume_eth",
-    # "volume_bnb",
-    # "volume_xrp",
-    # "num_trades_btc",
-    # "num_trades_eth",
-    # "num_trades_bnb",
-    # "num_trades_xrp",
-    # "open_spx",
-    # "high_spx",
-    # "low_spx",
-    # "close_spx",
-    # "volume_spx",
-    # "gdp",
-    # "unrate",
-
+BASE_FEATURE_COLUMNS = [
     "ret_close_btc",
     "ret_hl2_btc",
     "ret_close_eth",
@@ -123,11 +117,41 @@ FEATURE_COLUMNS = [
     "unrate_change",
 ]
 
-GRID_MAX_DEPTH = [3, 5, 7]
-GRID_MIN_SAMPLES_LEAF = [50, 100, 200, 500]
+DROP_VOLUME_TRADES = True
+
+EWM_SPANS = [7]
+VOL_WINDOWS = [21]
+
+EWM_FEATURE_COLUMNS = []
+for span in EWM_SPANS:
+    for a in ALL_ASSETS:
+        EWM_FEATURE_COLUMNS.append(f"ewm_ret_close_{a}_s{span}")
+        EWM_FEATURE_COLUMNS.append(f"ewm_ret_hl2_{a}_s{span}")
+    EWM_FEATURE_COLUMNS.append(f"ewm_dlog_volume_sum_s{span}")
+    EWM_FEATURE_COLUMNS.append(f"ewm_dlog_num_trades_sum_s{span}")
+VOL_FEATURE_COLUMNS = [f"roll_std_ret_close_btc_w{w}" for w in VOL_WINDOWS]
+
+FEATURE_COLUMNS = BASE_FEATURE_COLUMNS + EWM_FEATURE_COLUMNS + VOL_FEATURE_COLUMNS
+
+if DROP_VOLUME_TRADES:
+    FEATURE_COLUMNS = [
+        c for c in FEATURE_COLUMNS
+        if c not in ("dlog_volume_sum", "dlog_num_trades_sum")
+        and not c.startswith("ewm_dlog_volume_sum_")
+        and not c.startswith("ewm_dlog_num_trades_sum_")
+    ]
+
+GRID_MAX_DEPTH = [2, 3, 4, 5]
+GRID_MIN_SAMPLES_LEAF = [10, 25, 50, 75, 100, 150, 200]
 GRID_MAX_FEATURES = ["sqrt", "log2"]
-GRID_N_ESTIMATORS = [50, 100]
+GRID_N_ESTIMATORS = [200, 500]
 GRID_MAX_SAMPLES = [0.3, 0.5, None]
+
+# GRID_MAX_DEPTH = [3, 5, 7]
+# GRID_MIN_SAMPLES_LEAF = [50, 100, 200, 500]
+# GRID_MAX_FEATURES = ["sqrt", "log2"]
+# GRID_N_ESTIMATORS = [50, 100]
+# GRID_MAX_SAMPLES = [0.3, 0.5, None]
 
 RUN_MODE = "grid"
 TEST_SIZE = 0.2
@@ -181,6 +205,22 @@ def _dlog1p(series: pd.Series) -> pd.Series:
     """
     return np.log1p(series).diff()
 
+def _ewm_mean(series: pd.Series, span: int, shift: int = 1) -> pd.Series:
+    """
+    Exponentially weighted moving average computed from past values only.
+
+    shift=1 -> at time t uses data up to t-1 (safe for "predict tomorrow" setups).
+    """
+    s = series.shift(shift)
+    return s.ewm(span=span, adjust=False).mean()
+
+def _rolling_std(series: pd.Series, window: int, shift: int = 1) -> pd.Series:
+    """
+    Rolling std computed from past values only (shift=1).
+    window=7/21 captures volatility regime (short/medium horizon).
+    """
+    s = series.shift(shift)
+    return s.rolling(window=window, min_periods=window).std()
 
 def parse_monotonic_cst(value: str | None) -> list[int] | None:
     """
@@ -233,6 +273,16 @@ def load_dataset(debug_samples: int = 0) -> pd.DataFrame:
 
     df["dlog_volume_sum"] = _dlog1p(df["volume_sum"])
     df["dlog_num_trades_sum"] = _dlog1p(df["num_trades_sum"])
+    for span in EWM_SPANS:
+        for a in ALL_ASSETS:
+            df[f"ewm_ret_close_{a}_s{span}"] = _ewm_mean(df[f"ret_close_{a}"], span=span, shift=1)
+            df[f"ewm_ret_hl2_{a}_s{span}"] = _ewm_mean(df[f"ret_hl2_{a}"], span=span, shift=1)
+
+        df[f"ewm_dlog_volume_sum_s{span}"] = _ewm_mean(df["dlog_volume_sum"], span=span, shift=1)
+        df[f"ewm_dlog_num_trades_sum_s{span}"] = _ewm_mean(df["dlog_num_trades_sum"], span=span, shift=1)
+    
+    for w in VOL_WINDOWS:
+        df[f"roll_std_ret_close_btc_w{w}"] = _rolling_std(df["ret_close_btc"], window=w, shift=1)
 
     df["gdp_lag1"] = df["gdp"].shift(1)
     df["unrate_lag1"] = df["unrate"].shift(1)
@@ -365,6 +415,140 @@ def base_rf_params() -> dict:
         "monotonic_cst": parse_monotonic_cst(RF_MONOTONIC_CST_STR),
     }
 
+# def train_model_with_features(df: pd.DataFrame, feature_cols: list[str], test_size: float, rf_params: dict):
+#     X = df[feature_cols].copy()
+#     y = df[TARGET_COLUMN].copy()
+#     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, shuffle=False)
+#     model = build_model(**rf_params)
+#     model.fit(X_train, y_train)
+#     y_pred = model.predict(X_test)
+#     mae = mean_absolute_error(y_test, y_pred)
+#     rmse = mean_squared_error(y_test, y_pred) ** 0.5
+#     metrics = {
+#         "mae": float(mae),
+#         "rmse": float(rmse),
+#         "n_train": int(len(X_train)),
+#         "n_test": int(len(X_test)),
+#     }
+#     return model, metrics, X_test, y_test
+
+
+# def print_top_importances(model, feature_cols: list[str], X_test, y_test, top_k: int = 20) -> None:
+#     mdi = pd.Series(model.feature_importances_, index=feature_cols).sort_values(ascending=False)
+#     print("\nTop feature importances (MDI):")
+#     for name, val in mdi.head(top_k).items():
+#         print(f"  {name}: {val:.6f}")
+#     try:
+#         pi = permutation_importance(
+#             model, X_test, y_test,
+#             n_repeats=5,
+#             random_state=RF_RANDOM_STATE,
+#             n_jobs=RF_N_JOBS,
+#         )
+#         perm = pd.Series(pi.importances_mean, index=feature_cols).sort_values(ascending=False)
+#         print("\nTop feature importances (Permutation, mean over repeats):")
+#         for name, val in perm.head(top_k).items():
+#             print(f"  {name}: {val:.6f}")
+#     except Exception as e:
+#         print(f"\nPermutation importance skipped due to error: {e}")
+
+
+# def run_group_ablation(df: pd.DataFrame, best_params: dict, test_size: float) -> None:
+#     base_cols = FEATURE_COLUMNS
+#     groups = {
+#         "macro": ["gdp_lag1", "unrate_lag1", "gdp_growth", "unrate_change"],
+#         "volatility": VOL_FEATURE_COLUMNS,
+#         "ewm_all": EWM_FEATURE_COLUMNS,
+#         "spx": [c for c in base_cols if "_spx" in c],
+#         "alts": [c for c in base_cols if any(f"_{a}" in c for a in ["eth", "bnb", "xrp"])],
+#         "volume_trades": (
+#             ["dlog_volume_sum", "dlog_num_trades_sum"]
+#             + [c for c in base_cols if c.startswith("ewm_dlog_volume_sum_") or c.startswith("ewm_dlog_num_trades_sum_")]
+#         ),
+#     }
+#     _, base_metrics, _, _ = train_model_with_features(df, base_cols, test_size=test_size, rf_params=best_params)
+#     print("\n=== ABLATION (same rows, drop groups) ===")
+#     print(f"BASE (all features) mae={base_metrics['mae']:.10f} rmse={base_metrics['rmse']:.10f}")
+#     for name, drop_cols in groups.items():
+#         drop_cols = [c for c in drop_cols if c in base_cols]
+#         keep_cols = [c for c in base_cols if c not in drop_cols]
+#         _, m, _, _ = train_model_with_features(df, keep_cols, test_size=test_size, rf_params=best_params)
+#         d_mae = m["mae"] - base_metrics["mae"]
+#         d_rmse = m["rmse"] - base_metrics["rmse"]
+#         print(f"\nDROP: {name}")
+#         print(f"  n_drop={len(drop_cols)}")
+#         print(f"  mae={m['mae']:.10f}  (delta {d_mae:+.10f})")
+#         print(f"  rmse={m['rmse']:.10f} (delta {d_rmse:+.10f})")
+
+# def time_series_cv_report(
+#     df: pd.DataFrame,
+#     feature_cols: list[str],
+#     rf_params: dict,
+#     n_splits: int = 5,
+# ) -> dict:
+#     X = df[feature_cols]
+#     y = df[TARGET_COLUMN]
+#     tss = TimeSeriesSplit(n_splits=n_splits)
+#     fold_rows = []
+#     for fold, (train_idx, test_idx) in enumerate(tss.split(X), start=1):
+#         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+#         y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+#         model = build_model(**rf_params)
+#         model.fit(X_train, y_train)
+#         y_pred = model.predict(X_test)
+#         mae = mean_absolute_error(y_test, y_pred)
+#         rmse = mean_squared_error(y_test, y_pred) ** 0.5
+#         dir_acc = float(np.mean((y_pred >= 0) == (y_test.values >= 0)))
+#         y0 = np.zeros_like(y_test.values, dtype=float)
+#         mae0 = mean_absolute_error(y_test, y0)
+#         rmse0 = mean_squared_error(y_test, y0) ** 0.5
+#         dir0 = float(np.mean((y0 >= 0) == (y_test.values >= 0)))
+#         fold_rows.append(
+#             {
+#                 "fold": fold,
+#                 "n_train": int(len(train_idx)),
+#                 "n_test": int(len(test_idx)),
+#                 "mae": float(mae),
+#                 "rmse": float(rmse),
+#                 "dir_acc": float(dir_acc),
+#                 "mae_baseline0": float(mae0),
+#                 "rmse_baseline0": float(rmse0),
+#                 "dir_acc_baseline0": float(dir0),
+#             }
+#         )
+#     res = pd.DataFrame(fold_rows)
+#     print("\n=== WALK-FORWARD CV (TimeSeriesSplit) ===")
+#     print(res[["fold", "n_train", "n_test", "mae", "rmse", "dir_acc"]].to_string(index=False))
+#     def _mean_std(col: str) -> tuple[float, float]:
+#         return float(res[col].mean()), float(res[col].std(ddof=1)) if len(res) > 1 else (float(res[col].mean()), 0.0)
+#     mae_m, mae_s = _mean_std("mae")
+#     rmse_m, rmse_s = _mean_std("rmse")
+#     dir_m, dir_s = _mean_std("dir_acc")
+#     mae0_m, mae0_s = _mean_std("mae_baseline0")
+#     rmse0_m, rmse0_s = _mean_std("rmse_baseline0")
+#     dir0_m, dir0_s = _mean_std("dir_acc_baseline0")
+#     print("\nSummary (mean ± std):")
+#     print(f"  MAE : {mae_m:.10f} ± {mae_s:.10f}   (baseline0: {mae0_m:.10f} ± {mae0_s:.10f})")
+#     print(f"  RMSE: {rmse_m:.10f} ± {rmse_s:.10f}   (baseline0: {rmse0_m:.10f} ± {rmse0_s:.10f})")
+#     print(f"  DIR : {dir_m:.6f} ± {dir_s:.6f}       (baseline0: {dir0_m:.6f} ± {dir0_s:.6f})")
+#     return {
+#         "per_fold": res,
+#         "summary": {
+#             "mae_mean": mae_m,
+#             "mae_std": mae_s,
+#             "rmse_mean": rmse_m,
+#             "rmse_std": rmse_s,
+#             "dir_acc_mean": dir_m,
+#             "dir_acc_std": dir_s,
+#             "mae0_mean": mae0_m,
+#             "mae0_std": mae0_s,
+#             "rmse0_mean": rmse0_m,
+#             "rmse0_std": rmse0_s,
+#             "dir0_mean": dir0_m,
+#             "dir0_std": dir0_s,
+#         },
+#     }
+
 
 def run_grid_search(df: pd.DataFrame, test_size: float, output_path: Path) -> None:
     """
@@ -430,6 +614,14 @@ def run_grid_search(df: pd.DataFrame, test_size: float, output_path: Path) -> No
 
     if best_model is None or best_params is None or best_metrics is None:
         raise RuntimeError("Grid search did not produce any model.")
+    
+    # time_series_cv_report(df, FEATURE_COLUMNS, rf_params=best_params, n_splits=5)
+
+    # best_model_refit, _, X_test, y_test = train_model_with_features(
+    #     df, FEATURE_COLUMNS, test_size=test_size, rf_params=best_params
+    # )
+    # print_top_importances(best_model_refit, FEATURE_COLUMNS, X_test, y_test, top_k=25)
+    # run_group_ablation(df, best_params=best_params, test_size=test_size)
 
     save_model(best_model, output_path)
 
