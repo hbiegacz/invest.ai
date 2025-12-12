@@ -192,3 +192,41 @@ class LinearRegressionModelView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+class RandomForestModelView(APIView):
+    def get(self, request, *args, **kwargs):
+        refresh_flag = request.query_params.get("refresh", "").lower() in ("1", "true", "yes", "y")
+        service = ModelService()
+        try:
+            close_btc = service.random_forest(force_refresh=refresh_flag)
+            return Response({"close_btc": close_btc}, status=status.HTTP_200_OK)
+        except FileNotFoundError as e:
+            return Response({"error": "Trained random forest model not found.", "details": str(e)},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": "Unexpected error in random forest BTC model.", "details": str(e)},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class LSTMModelView(APIView):
+    def get(self, request, *args, **kwargs):
+        refresh_flag = request.query_params.get("refresh", "").lower() in ("1", "true", "yes", "y")
+        service = ModelService()
+        try:
+            close_btc = service.lstm_model(force_refresh=refresh_flag)
+            return Response({"close_btc": close_btc}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": "Unexpected error in LSTM placeholder.", "details": str(e)},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class TFTModelView(APIView):
+    def get(self, request, *args, **kwargs):
+        refresh_flag = request.query_params.get("refresh", "").lower() in ("1", "true", "yes", "y")
+        service = ModelService()
+        try:
+            close_btc = service.tft_model(force_refresh=refresh_flag)
+            return Response({"close_btc": close_btc}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": "Unexpected error in TFT placeholder.", "details": str(e)},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
