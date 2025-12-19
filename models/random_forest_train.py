@@ -141,17 +141,45 @@ if DROP_VOLUME_TRADES:
         and not c.startswith("ewm_dlog_num_trades_sum_")
     ]
 
+
+# Allows manual override of the feature list
+MANUAL_FEATURE_COLUMNS = [
+    "ret_close_bnb",
+    "ret_close_btc", 
+    "ret_close_eth", 
+    "ret_close_spx", 
+    "ret_close_xrp",
+    "ret_hl2_bnb", 
+    "ret_hl2_btc", 
+    "ret_hl2_eth", 
+    "ret_hl2_spx", 
+    "ret_hl2_xrp",
+    "ewm_dlog_num_trades_sum_s7", 
+    "ewm_dlog_volume_sum_s7",
+    "ewm_ret_close_bnb_s7", 
+    "ewm_ret_close_btc_s7", 
+    "ewm_ret_close_eth_s7", 
+    "ewm_ret_close_spx_s7", 
+    "ewm_ret_close_xrp_s7",
+    "ewm_ret_hl2_bnb_s7", 
+    "ewm_ret_hl2_btc_s7", 
+    "ewm_ret_hl2_eth_s7", 
+    "ewm_ret_hl2_spx_s7", 
+    "ewm_ret_hl2_xrp_s7",
+    "dlog_num_trades_sum", 
+    "dlog_volume_sum",
+    "gdp_growth", 
+    "unrate_change", 
+    "ret_btc"
+]
+if "MANUAL_FEATURE_COLUMNS" in locals() and MANUAL_FEATURE_COLUMNS:
+    FEATURE_COLUMNS = MANUAL_FEATURE_COLUMNS
+
 GRID_MAX_DEPTH = [2, 3, 4, 5]
 GRID_MIN_SAMPLES_LEAF = [10, 25, 50, 75, 100, 150, 200]
 GRID_MAX_FEATURES = ["sqrt", "log2"]
 GRID_N_ESTIMATORS = [200, 500]
 GRID_MAX_SAMPLES = [0.3, 0.5, None]
-
-# GRID_MAX_DEPTH = [3, 5, 7]
-# GRID_MIN_SAMPLES_LEAF = [50, 100, 200, 500]
-# GRID_MAX_FEATURES = ["sqrt", "log2"]
-# GRID_N_ESTIMATORS = [50, 100]
-# GRID_MAX_SAMPLES = [0.3, 0.5, None]
 
 RUN_MODE = "grid"
 TEST_SIZE = 0.2
