@@ -1,3 +1,14 @@
+"""
+Co pozmieniałam:
+1. Dodałam możliwość utworzenia więcej features, które są w Random Forest (log-returny, wolumeny, makro itp.). 
+2. Dodałam warstwę Dropout na końcu, czyli 'wyłączanie' części neuronów w trakcie nauki, aby unikać przeuczenia. 
+3. Early Stopping - po 15 epokach bez poprawy zatrzymuje trening.
+4. Scheduler - zwalnia naukę (zmniejsza LR), jeśli MAE się nie poprawiło przez ostatnie 5 epok.
+5. Troszkę inne parametry
+
+I teraz MAE jest na 0.016093.
+"""
+
 from __future__ import annotations
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -8,6 +19,43 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
+CRYPTO_ASSETS = ["btc", "eth", "bnb", "xrp"]
+INDEX_ASSETS = ["spx"]
+ALL_ASSETS = CRYPTO_ASSETS + INDEX_ASSETS
+
+EWM_SPANS = [7]
+VOL_WINDOWS = [21]
+
+MANUAL_FEATURE_COLUMNS = [
+    "ret_close_bnb",
+    "ret_close_btc", 
+    "ret_close_eth", 
+    "ret_close_spx", 
+    "ret_close_xrp",
+    "ret_hl2_bnb", 
+    "ret_hl2_btc", 
+    "ret_hl2_eth", 
+    "ret_hl2_spx", 
+    "ret_hl2_xrp",
+    "ewm_dlog_num_trades_sum_s7", 
+    "ewm_dlog_volume_sum_s7",
+    "ewm_ret_close_bnb_s7", 
+    "ewm_ret_close_btc_s7", 
+    "ewm_ret_close_eth_s7", 
+    "ewm_ret_close_spx_s7", 
+    "ewm_ret_close_xrp_s7",
+    "ewm_ret_hl2_bnb_s7", 
+    "ewm_ret_hl2_btc_s7", 
+    "ewm_ret_hl2_eth_s7", 
+    "ewm_ret_hl2_spx_s7", 
+    "ewm_ret_hl2_xrp_s7",
+    "dlog_num_trades_sum", 
+    "dlog_volume_sum",
+    "gdp_growth", 
+    "unrate_change", 
+    "ret_btc"
+]
+
 @dataclass(frozen=True)
 class LSTMConfig:
     lookback: int = 60
@@ -16,13 +64,14 @@ class LSTMConfig:
     feature_cols: tuple[str, ...] = tuple()
     hidden_size: int = 64
     num_layers: int = 2
-    dropout: float = 0.1
+    dropout: float = 0.2
     batch_size: int = 64
     lr: float = 1e-3
-    epochs: int = 20
-    weight_decay: float = 1e-4
+    epochs: int = 100     
+    weight_decay: float = 1e-3
     grad_clip: float = 1.0
     val_ratio: float = 0.2
+    patience: int = 15   
     seed: int = 42
     device: str = "cpu"
 
@@ -44,8 +93,101 @@ class StandardScalerState:
         return StandardScalerState(mean_=mean_, std_=std_, feature_cols=tuple(feature_cols))
 
 
+def _log_return(series: pd.Series) -> pd.Series:
+    """
+    Computes log-return: log(x_t) - log(x_{t-1}).
+    Assumes series values are > 0.
+    """
+    return np.log(series).diff()
+
+
+def _dlog1p(series: pd.Series) -> pd.Series:
+    """
+    Computes change in log(1 + x): log1p(x_t) - log1p(x_{t-1}).
+    Works with zeros and stabilizes heavy-tailed series like volume / trades.
+    """
+    return np.log1p(series).diff()
+
+
+def _ewm_mean(series: pd.Series, span: int, shift: int = 1) -> pd.Series:
+    """
+    Exponentially weighted moving average computed from past values only.
+    
+    shift=1 -> at time t uses data up to t-1 (safe for "predict tomorrow" setups).
+    """
+    s = series.shift(shift)
+    return s.ewm(span=span, adjust=False).mean()
+
+
+def _rolling_std(series: pd.Series, window: int, shift: int = 1) -> pd.Series:
+    """
+    Rolling std computed from past values only (shift=1).
+    window=7/21 captures volatility regime (short/medium horizon).
+    """
+    s = series.shift(shift)
+    return s.rolling(window=window, min_periods=window).std()
+
+
 def build_features(df, cfg):
-    return df
+    """
+    Builds comprehensive features matching Random Forest implementation.
+    Creates log returns, EWM features, rolling volatility, and macro features.
+    """
+    out = df.copy()
+    
+    # 1. Create HL2 (high-low average) for all assets
+    for a in ALL_ASSETS:
+        if f"high_{a}" in out.columns and f"low_{a}" in out.columns:
+            out[f"hl2_{a}"] = (out[f"low_{a}"] + out[f"high_{a}"]) / 2.0
+    
+    # 2. Aggregate volume and trades
+    volume_cols = [f"volume_{a}" for a in ALL_ASSETS if f"volume_{a}" in out.columns]
+    if volume_cols:
+        out["volume_sum"] = out[volume_cols].sum(axis=1)
+    
+    trades_cols = [f"num_trades_{a}" for a in CRYPTO_ASSETS if f"num_trades_{a}" in out.columns]
+    if trades_cols:
+        out["num_trades_sum"] = out[trades_cols].sum(axis=1)
+    
+    # 3. Compute log returns for close and hl2 prices
+    for a in ALL_ASSETS:
+        if f"close_{a}" in out.columns:
+            out[f"ret_close_{a}"] = _log_return(out[f"close_{a}"])
+        if f"hl2_{a}" in out.columns:
+            out[f"ret_hl2_{a}"] = _log_return(out[f"hl2_{a}"])
+    
+    # 4. Compute dlog transformations for volume and trades
+    if "volume_sum" in out.columns:
+        out["dlog_volume_sum"] = _dlog1p(out["volume_sum"])
+    if "num_trades_sum" in out.columns:
+        out["dlog_num_trades_sum"] = _dlog1p(out["num_trades_sum"])
+    
+    # 5. Generate EWM features
+    for span in EWM_SPANS:
+        for a in ALL_ASSETS:
+            if f"ret_close_{a}" in out.columns:
+                out[f"ewm_ret_close_{a}_s{span}"] = _ewm_mean(out[f"ret_close_{a}"], span=span, shift=1)
+            if f"ret_hl2_{a}" in out.columns:
+                out[f"ewm_ret_hl2_{a}_s{span}"] = _ewm_mean(out[f"ret_hl2_{a}"], span=span, shift=1)
+        
+        if "dlog_volume_sum" in out.columns:
+            out[f"ewm_dlog_volume_sum_s{span}"] = _ewm_mean(out["dlog_volume_sum"], span=span, shift=1)
+        if "dlog_num_trades_sum" in out.columns:
+            out[f"ewm_dlog_num_trades_sum_s{span}"] = _ewm_mean(out["dlog_num_trades_sum"], span=span, shift=1)
+    
+    for w in VOL_WINDOWS:
+        if "ret_close_btc" in out.columns:
+            out[f"roll_std_ret_close_btc_w{w}"] = _rolling_std(out["ret_close_btc"], window=w, shift=1)
+    
+    if "gdp" in out.columns:
+        out["gdp_lag1"] = out["gdp"].shift(1)
+        out["gdp_growth"] = out["gdp_lag1"].pct_change()
+    
+    if "unrate" in out.columns:
+        out["unrate_lag1"] = out["unrate"].shift(1)
+        out["unrate_change"] = out["unrate_lag1"] - out["unrate_lag1"].shift(1)
+    
+    return out
 
 def build_target_ret_btc_next(df, close_col):
     out = df.copy()
@@ -100,9 +242,10 @@ class LSTMRegressor(nn.Module):
             batch_first=True,
         )
         self.head = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size),
+            nn.Linear(hidden_size, hidden_size // 2),
             nn.ReLU(),
-            nn.Linear(hidden_size, 1),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size // 2, 1),
         )
 
     def forward(self, x):
@@ -121,11 +264,18 @@ def train_lstm(df_raw, cfg):
         raise ValueError("cfg.feature_cols is empty. Wait for feature selection and then fill it.")
     set_seed(cfg.seed)
     df = df_raw.sort_values("open_time").reset_index(drop=True)
+    print(f"Initial dataset size: {len(df)} rows")
     df = build_features(df, cfg)
     df = build_target_ret_btc_next(df, close_col=cfg.close_col)
+    required_cols = list(cfg.feature_cols) + [cfg.target]
+    df = df.dropna(subset=required_cols).reset_index(drop=True)
+    print(f"After feature engineering and NaN removal: {len(df)} rows")
+    if len(df) < cfg.lookback + 10:
+        raise ValueError(f"Not enough data after feature engineering. Have {len(df)} rows, need at least {cfg.lookback + 10}")
     split_idx = int(len(df) * (1.0 - cfg.val_ratio))
     df_train = df.iloc[:split_idx].copy()
     df_val = df.iloc[split_idx:].copy()
+    print(f"Train set: {len(df_train)} rows, Val set: {len(df_val)} rows")
     scaler = StandardScalerState.fit(df_train, cfg.feature_cols)
     def _apply_scaler(d):
         out = d.copy()
@@ -148,9 +298,11 @@ def train_lstm(df_raw, cfg):
         dropout=cfg.dropout,
     ).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', factor=0.5, patience=5)
     loss_fn = nn.MSELoss()
     best_val_mae = float("inf")
     best_state = None
+    no_improve_epochs = 0
     for epoch in range(cfg.epochs):
       model.train()
       tr_abs_sum = 0.0
@@ -178,11 +330,22 @@ def train_lstm(df_raw, cfg):
               va_abs_sum += torch.abs(pred - yb).sum().item()
               va_count += yb.numel()
       tr_mae = tr_abs_sum / max(1, tr_count)
-      va_mae = va_abs_sum / max(1, va_count)
+      va_mae = va_abs_sum / max(1, va_count)  
+      scheduler.step(va_mae)
+    
       if va_mae < best_val_mae:
           best_val_mae = va_mae
           best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
-      print(f"[epoch {epoch+1}/{cfg.epochs}] train_mae={tr_mae:.6f} val_mae={va_mae:.6f} best_val_mae={best_val_mae:.6f}")
+          no_improve_epochs = 0
+      else:
+          no_improve_epochs += 1
+          
+      print(f"[epoch {epoch+1:02d}/{cfg.epochs}] train_mae={tr_mae:.6f} val_mae={va_mae:.6f} best_val_mae={best_val_mae:.6f}")
+      
+      if no_improve_epochs >= cfg.patience:
+          print(f"Early stopping at epoch {epoch+1}")
+          break
+          
     if best_state is None:
         raise RuntimeError("Training failed: best_state is None")
     artifact = {
@@ -213,8 +376,10 @@ def predict_next_close(
     df = df_raw.sort_values("open_time").reset_index(drop=True)
     df = build_features(df, cfg)
     df = build_target_ret_btc_next(df, close_col=cfg.close_col)
+    required_cols = list(cfg.feature_cols) + [cfg.target]
+    df = df.dropna(subset=required_cols).reset_index(drop=True)
     if len(df) < cfg.lookback:
-        raise ValueError("Not enough rows for inference lookback window.")
+        raise ValueError(f"Not enough rows for inference lookback window. Have {len(df)}, need {cfg.lookback}")
     df_last = df.iloc[-cfg.lookback:].copy()
     X = df_last.loc[:, cfg.feature_cols].astype(float).to_numpy()
     X = scaler.transform(X).astype(np.float32)
@@ -247,17 +412,12 @@ if __name__ == "__main__":
     parquet_path = ROOT / "backend" / "data" / "historical_data.parquet"
     df = pd.read_parquet(parquet_path, engine="pyarrow")
     df = df.sort_values("open_time").reset_index(drop=True)
-    exclude = {"open_time", "ret_btc", "ret_btc_next"}
-    feature_cols = [
-        c for c in df.columns
-        if c not in exclude and pd.api.types.is_numeric_dtype(df[c])
-    ]
+    
+    feature_cols = MANUAL_FEATURE_COLUMNS
+    
     device = "cuda" if torch.cuda.is_available() else "cpu"
     cfg = LSTMConfig(
         feature_cols=tuple(feature_cols),
-        lookback=60,
-        epochs=20,
-        batch_size=128,
         device=device,
     )
     artifact = train_lstm(df, cfg)
