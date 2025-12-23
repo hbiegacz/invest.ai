@@ -1,10 +1,17 @@
 """
 Co pozmieniałam:
-1. Dodałam możliwość utworzenia więcej features, które są w Random Forest (log-returny, wolumeny, makro itp.). 
-2. Dodałam warstwę Dropout na końcu, czyli 'wyłączanie' części neuronów w trakcie nauki, aby unikać przeuczenia. 
+1. Dodałam możliwość utworzenia więcej features, jak te które są w Random Forest (log-returny, wolumeny, makro itp.). 
+    Zamiast korzystać z tych features, które były w parquet, 
+    zamieniłam te wybrane features na takie, które dobrze sobie radziły podczas SHAP.
+
+2. Dodałam warstwę Dropout na końcu, czyli 'wyłączanie' części neuronów w trakcie nauki. 
+    Poprawa wyników sugeruje, że model mógł się wcześniej przeuczać. 
+    Teraz będzie mniej podatny na overfitting.
+
 3. Early Stopping - po 15 epokach bez poprawy zatrzymuje trening.
+
 4. Scheduler - zwalnia naukę (zmniejsza LR), jeśli MAE się nie poprawiło przez ostatnie 5 epok.
-5. Troszkę inne parametry
+    Dzięki temu model nie oscyluje według najlepszego rozwiązania, mijając je.
 
 I teraz MAE jest na 0.016093.
 """
