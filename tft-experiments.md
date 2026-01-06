@@ -100,7 +100,7 @@ Używany jest `darts.models.TFTModel` z:
 Bo przy indeksie `_t=0..N-1` model dostaje dodatkową informację o pozycji w oknie wejściowym. To poprawia stabilność uczenia, szczególnie gdy:
 
 -   sygnał w cechach jest podobny w różnych fragmentach historii,
--   chcesz, żeby model odróżniał dawne vs świeższe punkty w kontekście.
+-   chcemy, żeby model odróżniał dawne vs świeższe punkty w kontekście.
 
 ---
 
@@ -162,8 +162,6 @@ Constraint:
 
 ## Uzasadnienie: dlaczego wybrane hiperparametry zadziałały najlepiej
 
-Poniżej jest uzasadnienie teoretyczne i praktyczne, które pasuje do tego konkretnego setupu: 1-step ahead, dużo szumu, finansowe targety typu return, mała przewidywalność i silne ryzyko overfitu.
-
 ### 1) `output_chunk_length = 1` (stałe)
 
 To ma sens, bo cała ewaluacja i pipeline są zrobione pod jednopunktową predykcję.
@@ -176,116 +174,29 @@ To jest balans między:
 -   za krótko (np. < 20-30): model nie widzi kontekstu, a attention/LSTM nie mają z czego wyciągać wzorców
 -   za długo (np. dużo powyżej 90): dla returnów zwykle nie ma stabilnych zależności dalekiego zasięgu, a długi kontekst podnosi wariancję i ułatwia overfit
 
-Dlatego 30/60/90 to sensowne "okna pamięci":
-
--   30: krótkoterminowe reżimy i momentum/mean-reversion,
--   60: średni kontekst (zmiany zmienności),
--   90: większy kontekst, jeśli Twoje featury niosą informację o regime shift.
-
-W praktyce często wygrywa 30 albo 60, bo krótsze okno jest bardziej "lokalne" i mniej podatne na dopasowanie historycznych przypadków, które się nie powtórzą.
-
 ### 3) `hidden_size` = 16 vs 96 (mały vs większy model)
 
-To wprost kontroluje pojemność.
-
--   16 zwykle wygrywa, gdy dane są trudne (niski signal-to-noise) i chcesz uniknąć overfitu.
--   96 może wygrać, jeśli:
-
-    -   masz dużo danych,
-    -   featury są naprawdę informatywne,
-    -   regularizacja/early stopping dobrze działają.
-
-W finansach (zwłaszcza returny) częściej sprawdza się mniejsza pojemność, bo większa szybko zaczyna "zapamiętywać".
+To wprost kontroluje pojemność. Im mniejszy hidden_size, tym większa odporność na szum i mniejsze dopasowanie.
 
 ### 4) `lstm_layers = 2`
 
-Dwie warstwy LSTM w TFT często dają lepszą reprezentację sekwencji niż 1 warstwa, ale nadal bez przesady:
-
--   1 warstwa bywa za płytka dla mieszanki sygnałów (covariates + sezonowość),
--   > 2 warstwy to już rośnie ryzyko niestabilności i overfitu (zwłaszcza na CPU i ograniczonym data).
-
-Czyli 2 to takie "sweet spot".
+Dwie warstwy LSTM w TFT powinny dawać rozsądną reprezentację sekwencji, z niewielkim ryzykiem overfitu.
 
 ### 5) `num_attention_heads` = 1 lub 4
 
-Heads kontrolują, ile "różnych perspektyw" attention może utrzymać.
+Heads kontrolują, ile różnych perspektyw attention może utrzymać.
 
 -   1 head: prostszy model, mniejsze ryzyko overfitu, często lepszy gdy dane są noisy.
--   4 heads: model może równolegle patrzeć na różne fragmenty kontekstu (np. inne cechy/okresy), ale tylko wtedy ma to sens, gdy `hidden_size` jest wystarczający.
-
-Ważne: u Ciebie jest constraint `hidden_size % heads == 0`, więc 4 heads ma sens głównie dla 16/96 (obie dzielą się przez 4).
+-   4 heads: model może równolegle patrzeć na różne fragmenty kontekstu (np. inne cechy/okresy).
 
 ### 6) `dropout` = 0.0 albo 0.2
 
-To jest klasyczny trade-off:
-
--   0.0 może wygrać, jeśli:
-
-    -   early stopping działa,
-    -   model jest mały (np. hidden_size=16),
-    -   sygnał jest bardzo słaby i dropout tylko "rozmywa" uczenie.
-
--   0.2 zwykle pomaga, jeśli:
-
-    -   model jest większy (hidden_size=96),
-    -   masz tendencję do overfitu,
-    -   walidacja jest stabilna.
-
-Czyli sensownie: testujesz "bez regularizacji" i "z umiarkowaną regularizacją".
+Im bardziej skomplikowany model, tym większy dropout ma sens.
 
 ### 7) `lr` = 3e-4 albo 1e-3
 
-To są dwa typowe poziomy dla Adam/AdamW:
-
--   1e-3: szybciej schodzi z lossu, często ok dla mniejszych modeli i prostych danych.
--   3e-4: stabilniejsze, lepsze gdy model ma większą pojemność albo dane są trudne.
-
-Jeśli w gridzie "wygrywa" 3e-4, to zwykle oznacza, że:
-
--   gradienty są bardziej zmienne,
--   model łatwo przeskakuje minima przy 1e-3,
--   albo walidacja jest bardziej kapryśna.
-
 ### 8) `batch_size = 64`
 
-To jest rozsądne "domyślne optimum" dla CPU i stabilności uczenia:
+## Dlaczego te ustawienia najlepiej zadziałały?
 
--   mniejsze batch: większy szum gradientu, czasem pomaga w generalizacji, ale wolniej i mniej stabilnie,
--   większe batch: stabilniej, ale może gorzej generalizować w noisy taskach, plus na CPU bywa wolniej przez pamięć/cache.
-
-64 to często najlepszy kompromis.
-
----
-
-## Dlaczego te ustawienia "najlepiej zadziałały" w Twoim pipeline
-
-W skrócie: w tym problemie (returny, 1-step ahead) największym wrogiem jest overfit i "udawana przewidywalność".
-
-Siatka, którą testowałeś, wprost sprawdzała dwa podejścia:
-
--   mały/stabilny model: `hidden_size=16`, często `heads=1` lub `4`, dropout 0, lr 1e-3
--   większy/regularizowany model: `hidden_size=96`, `heads=4`, dropout 0.2, lr 3e-4
-
-I to jest dokładnie to, co ma sens przy TFT:
-
--   albo idziesz w prostotę i liczysz na minimalną generalizację,
--   albo dajesz pojemność, ale pilnujesz regularizacji i stabilnego LR.
-
-Wyniki z backtestu (rolling 1-step, bez retrain) są dobrym kryterium, bo mierzą zachowanie bardzo zbliżone do produkcyjnego.
-
----
-
-## Artefakty i reproducibility
-
-Zapisujesz:
-
--   model (`tft_model`)
--   scalery (`scalers.joblib`)
--   `metadata.json` (cfg, lista covariatów, target, ścieżka modelu)
-
-Dzięki temu inference (`predict_next_return`) odtwarza dokładnie ten sam preprocessing:
-
--   buduje TimeSeries,
--   skaluje covariates/target,
--   robi predykcję,
--   robi inverse transform.
+W tym problemie największym wrogiem jest overfit i udawana przewidywalność. Sprawdziłem w zasadzie model mniejszy i większy. Liczyłem na to, że mniejszy, prostszy model lepiej zgeneralizuje i nie będzie miał zbyt dużego overfitu i chyba się to nawet udało - w końcu tft miał najlepszy wynik ze wszystkich naszych modeli.
