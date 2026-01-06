@@ -18,17 +18,17 @@ Rozpoczynając pracę nad random forestem korzystaliśmy z danych historycznych,
 ## Budowa modelu
 
 Rozpoczynając pracę nad modelem, zdecydowaliśmy, że najważniejszymi parametrami naszego modelu będą:
-- max_depth - ogranicza głębokość drzewa
-- min_samples_leaf -  minimalna liczba próbek w liściu
-- max_features - liczba cech, które bierze pod uwagę pojedyncze drzewo
-- n_estimators -  liczba drzew w lesie
-- max_samples - liczba próbek, na których uczy się każde drzewo
-- criterion -  funkcja oceniająca jakość podziału
+- `max_depth` - ogranicza głębokość drzewa
+- `min_samples_leaf` -  minimalna liczba próbek w liściu
+- `max_features` - liczba cech, które bierze pod uwagę pojedyncze drzewo
+- `n_estimators` -  liczba drzew w lesie
+- `max_samples` - liczba próbek, na których uczy się każde drzewo
+- `criterion` -  funkcja oceniająca jakość podziału
 
-Dlatego właśnie to od pracy nad optymalizacją tych parametrów zajęliśmy się w pierwszej kolejności.
+Dlatego właśnie to optymalizacją tych parametrów zajęliśmy się w pierwszej kolejności.
 
 ## Pierwsze wnioski i problemy
-Wstępna optymalizacja metodą Grid Search wykazała niepokojące tendencje w doborze parametrów. Model dążył do tworzenia skrajnie płytkich lasów, co sugerowało wysoki poziom szumu w danych.
+Wstępna optymalizacja metodą **Grid Search** wykazała niepokojące tendencje. Model dążył do tworzenia skrajnie płytkich lasów, co sugerowało wysoki poziom szumu w danych.
 
 ```bash
 === BEST MODEL FROM GRID SEARCH ===
@@ -38,17 +38,6 @@ Best hyperparameters:
   max_features: log2
   n_estimators: 50
   max_samples: 0.5
-
-Metrics on test set:
-  mae: 0.016587117185736317
-  rmse: 0.023164909256702313
-  n_train: 1670
-  n_test: 418
-
-
-Naive baseline (ret_tomorrow = 0):
-  mae: 0.024311851021388362
-  rmse: 0.04379106572596224
 ```
 
 Zaniepokoiły nas następujące rzeczy:
@@ -62,26 +51,23 @@ W związku z tym, zdecydowaliśmy, że problem stanowią wykorzystywane przez na
 Aby wyeliminować szum i dostarczyć modelowi bardziej czytelne sygnały, dokonaliśmy transformacji danych, wprowadzając nowe grupy cech:
 
 #### Zwroty z cen `ret_`
-- `ret_close_*` -  dzienna zmiana ceny zamknięcia danego rynku (np. BTC, ETH, SPX) wyrażona jako różnica między dniem bieżącym a poprzednim.
-
+- `ret_close_*` -  dzienna zmiana ceny zamknięcia danego rynku (np. BTC, ETH, SPX) wyrażona jako różnica między dniem bieżącym, a poprzednim.
 - `ret_hl_*` - analogiczny wskaźnik liczony dla ceny uśrednionej z danego dnia (średnia z wartości high i low).
 
 #### Aktywność na rynku `dlog`
 - `dlog_volume_sum` – zmiana łącznego wolumenu obrotu na wszystkich rynkach w skali logarytmicznej (dzień do dnia).
-
 - `dlog_num_trades_sum` – odpowiednik powyższej miary dla łącznej liczby transakcji na rynku kryptowalut.
 
 #### Wartości wygładzone `ewm`
 Czyli trend w aktywności rynku zamiast dziennego szumu.
 - `ewm_ret_close_*` i `ewm_ret_hl2_*` – wykładniczo ważona średnia zwrotów cen, gdzie nowsze obserwacje mają większą wagę niż starsze (lepsze odwzorowanie aktualnego trendu).
-
 - `ewm_dlog_volume_sum_*` i `ewm_dlog_num_trades_sum_*` –  identyczna metoda wygładzania zastosowana dla zmian wolumenu i liczby transakcji.
 
 #### Zmienność `roll_std`
 - `roll_std_ret_close_btc_*` – miara zmienności rynku, liczona jako odchylenie standardowe zwrotów BTC w ruchomym oknie czasowym (np. 7, 21 dni).
 
 #### Makro `gdp`, `unrate`
-- `gdp_lag1`, `gdp_growth`, `unrate_lag1`, `unrate_change` –  poziomy i zmiany PKB oraz bezrobocia z poprzednich okresów. Używamy wartości opóźnionych (lag), ponieważ dane te publikowane są rzadziej, co chroni nas przed wyciekiem danych z przyszłości (data leakage).
+- `gdp_lag1`, `gdp_growth`, `unrate_lag1`, `unrate_change` –  poziomy i zmiany PKB oraz bezrobocia z poprzednich okresów. Używamy wartości opóźnionych (lag), ponieważ dane te publikowane są rzadziej. Dzięki temu chronimy model przed wyciekiem danych z przyszłości (data leakage).
 
 ## Analiza shap
 Za pomocą narzędzia SHAP przyjrzeliśmy się poszczególnym cechom naszego modelu. 
@@ -94,6 +80,7 @@ W pierwszej kolejności rzucała się w oczy konieczność eliminacji surowych d
 
 Kolejnymi cechami, które nie okazały się produktywne są dane makroekonomiczne, takie jak `gdp`, `unrate`, `unrate_lag1`.
 
+Po eliminacji tych cech, tak prezentuje się wykres podsumowania SHAP:
 ![Third shap summary](models/shap/shap_report_plots/image-2.png)
 
 
