@@ -523,13 +523,13 @@ export default function Analysis() {
           disabled={modelLoading}
           className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-800 transition disabled:opacity-60"
         >
-          {modelLoading ? "Uruchamiam…" : "Uruchom model"}
+          {modelLoading ? "Uruchamiam..." : "Uruchom model"}
         </button>
       </div>
 
       {loading && (
         <p className="text-sm text-slate-500">
-          Ładowanie danych historycznych…
+          Ładowanie danych historycznych...
         </p>
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
