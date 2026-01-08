@@ -32,3 +32,5 @@ media/
 .devcontainer/
 skrypt.py
 output.txt
+*.aux
+*.out

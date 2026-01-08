@@ -1,0 +1,881 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[polish]{babel}
+
+\usepackage{amsmath,amssymb}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{geometry}
+
+\usepackage{hyperref}
+\usepackage[section]{placeins}
+\usepackage{float}
+
+\geometry{
+  left=2.2cm,
+  right=2.2cm,
+  top=2.2cm,
+  bottom=2.2cm
+}
+
+\begin{document}
+
+\section{Linear Regression (OLS / Ridge / Lasso) - dokumentacja modelu}
+
+\subsection{Cel modelu}
+
+Model liniowy służy do prognozy \textbf{zwrotu BTC na następny dzień} (1-step ahead):
+
+\begin{itemize}
+  \item \texttt{ret\_btc\_next = pct\_change(close\_btc).shift(-1)}
+\end{itemize}
+
+Czyli w dniu \emph{t} używamy cech z dnia \emph{t}, aby przewidzieć zwrot w dniu \emph{t+1}.
+
+\medskip\hrule\medskip
+
+\subsection{Dane i przygotowanie datasetu}
+
+\subsubsection{Źródło danych}
+
+\begin{itemize}
+  \item \texttt{backend/data/historical\_data.parquet}
+\end{itemize}
+
+Po wczytaniu dane są sortowane chronologicznie po \texttt{open\_time} (jeśli kolumna istnieje).
+
+\subsubsection{Budowa targetu}
+
+W kodzie target jest tworzony następująco:
+
+\begin{itemize}
+  \item \texttt{ret\_btc = close\_btc.pct\_change()}
+  \item \texttt{ret\_btc\_next = ret\_btc.shift(-1)}
+\end{itemize}
+
+Następnie usuwane są wiersze z brakami w cechach lub w target (\texttt{dropna}).
+
+\medskip\hrule\medskip
+
+\subsection{Cechy wejściowe (FEATURE\_COLUMNS)}
+
+W tym modelu używamy \textbf{surowych poziomów} (OHLC, wolumen, liczba transakcji, indeks SPX oraz makro).
+
+Ceny (OHLC) dla krypto:
+
+\begin{itemize}
+  \item \texttt{open\_btc}, \texttt{high\_btc}, \texttt{low\_btc}, \texttt{close\_btc}
+  \item \texttt{open\_eth}, \texttt{high\_eth}, \texttt{low\_eth}, \texttt{close\_eth}
+  \item \texttt{open\_bnb}, \texttt{high\_bnb}, \texttt{low\_bnb}, \texttt{close\_bnb}
+  \item \texttt{open\_xrp}, \texttt{high\_xrp}, \texttt{low\_xrp}, \texttt{close\_xrp}
+\end{itemize}
+
+Wolumen i liczba transakcji:
+
+\begin{itemize}
+  \item \texttt{volume\_btc}, \texttt{volume\_eth}, \texttt{volume\_bnb}, \texttt{volume\_xrp}
+  \item \texttt{num\_trades\_btc}, \texttt{num\_trades\_eth}, \texttt{num\_trades\_bnb}, \texttt{num\_trades\_xrp}
+\end{itemize}
+
+Indeks SPX:
+
+\begin{itemize}
+  \item \texttt{open\_spx}, \texttt{high\_spx}, \texttt{low\_spx}, \texttt{close\_spx}, \texttt{volume\_spx}
+\end{itemize}
+
+Makro:
+
+\begin{itemize}
+  \item \texttt{gdp}, \texttt{unrate}
+\end{itemize}
+
+Target:
+
+\begin{itemize}
+  \item \texttt{ret\_btc\_next}
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Split danych (train/test)}
+
+Podział jest chronologiczny, bez losowego mieszania:
+
+\begin{itemize}
+  \item \texttt{test\_size = 0.2}
+  \item \texttt{shuffle = False}
+\end{itemize}
+
+Dla uruchomionego runu:
+
+\begin{itemize}
+  \item \texttt{n\_train = 1680}
+  \item \texttt{n\_test = 420}
+\end{itemize}
+
+To utrzymuje realistyczny scenariusz predykcji w szeregach czasowych (trenujemy na przeszłości i testujemy na przyszłości).
+
+\medskip\hrule\medskip
+
+\subsection{Pipeline i skalowanie}
+
+Model jest trenowany jako \texttt{sklearn.pipeline.Pipeline}:
+
+\begin{enumerate}
+  \item \texttt{StandardScaler()}
+  \item regresor liniowy: \texttt{LinearRegression} / \texttt{Ridge} / \texttt{Lasso}
+\end{enumerate}
+
+Skalowanie jest szczególnie istotne dla modeli z regularyzacją (Ridge/Lasso), bo współczynniki kary zależą od skali cech.
+
+\medskip\hrule\medskip
+
+\subsection{Warianty modelu}
+
+Skrypt obsługuje 3 tryby (\texttt{--model-type}):
+
+\subsubsection{1) OLS (LinearRegression)}
+
+\begin{itemize}
+  \item klasyczna regresja najmniejszych kwadratów bez regularyzacji
+\end{itemize}
+
+\subsubsection{2) Ridge}
+
+\begin{itemize}
+  \item regresja z karą L2: \texttt{Ridge(alpha=alpha)}
+  \item stabilizuje współczynniki i zmniejsza wariancję, zwykle pomaga przy współliniowości cech
+\end{itemize}
+
+\subsubsection{3) Lasso}
+
+\begin{itemize}
+  \item regresja z karą L1: \texttt{Lasso(alpha=alpha)}
+  \item może zerować część wag (selekcja cech), co bywa korzystne przy dużej liczbie skorelowanych sygnałów
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Strojenie hiperparametrów (Lasso)}
+
+Jeśli \texttt{--model-type lasso}, wykonywane jest proste strojenie \texttt{alpha} na zbiorze testowym (chronologicznym):
+
+Testowane wartości:
+
+\begin{itemize}
+  \item \texttt{[0.0001, 0.001, 0.005, 0.01, 0.05, 0.1, 0.2, 0.5, 1.0]}
+\end{itemize}
+
+Wybór ``best'':
+
+\begin{itemize}
+  \item minimalne \texttt{MAE} na zbiorze testowym
+\end{itemize}
+
+Z logów:
+
+\begin{itemize}
+  \item \textbf{Best alpha:} \texttt{0.005}
+  \item \textbf{MAE =} \texttt{0.016855}
+  \item \textbf{RMSE =} \texttt{0.023352}
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Metryki}
+
+Raportowane metryki na zbiorze testowym:
+
+\begin{itemize}
+  \item \texttt{MAE = mean\_absolute\_error(y\_test, y\_pred)}
+  \item \texttt{RMSE = sqrt(mean\_squared\_error(y\_test, y\_pred))}
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Wyniki eksperymentów (z logów)}
+
+\subsubsection{OLS (LinearRegression)}
+
+\begin{itemize}
+  \item \textbf{MAE:} \texttt{0.043481953958960734}
+  \item \textbf{RMSE:} \texttt{0.0649079753374987}
+  \item \texttt{n\_train=1680}, \texttt{n\_test=420}
+\end{itemize}
+
+W tej konfiguracji model liniowy bez regularyzacji nie generalizuje dobrze na test-set.
+
+\subsubsection{Lasso (z tuningiem alpha)}
+
+\begin{itemize}
+  \item \textbf{MAE:} \texttt{0.01685521013312673}
+  \item \textbf{RMSE:} \texttt{0.0233521064909458}
+  \item najlepsze \texttt{alpha = 0.005}
+\end{itemize}
+
+Widać, że regularyzacja L1 znacząco poprawia wynik względem OLS.
+
+\medskip\hrule\medskip
+
+\subsection{Artefakty i zapis modelu}
+
+Model jest zapisywany do:
+
+\begin{itemize}
+  \item \texttt{backend/data/linear\_regression\_btc.pkl}
+\end{itemize}
+
+Format zapisu (\texttt{joblib.dump}) zawiera słownik:
+
+\begin{itemize}
+  \item \texttt{model}: pipeline (scaler + regressor)
+  \item \texttt{features}: lista \texttt{FEATURE\_COLUMNS}
+  \item \texttt{target}: \texttt{ret\_btc\_next}
+  \item \texttt{target\_column\_in\_df}: \texttt{ret\_btc\_next}
+\end{itemize}
+
+To umożliwia spójne odtworzenie inferencji (te same cechy w tej samej kolejności + ten sam scaler).
+
+\section{Random Forest}
+
+\subsection{Zbiór danych}
+
+Rozpoczynając pracę nad random forestem korzystaliśmy z danych historycznych, które zawierały następujące wartości:
+
+\subsubsection{Ceny otwarte, najwyższe, najniższe, zamknięte}
+
+\begin{itemize}
+  \item \texttt{open\_btc}, \texttt{open\_eth}, \texttt{open\_bnb}, \texttt{open\_xrp}, \texttt{open\_spx}
+  \item \texttt{high\_btc}, \texttt{high\_eth}, \texttt{high\_bnb}, \texttt{high\_xrp}, \texttt{high\_spx}
+  \item \texttt{low\_btc}, \texttt{low\_eth}, \texttt{low\_bnb}, \texttt{low\_xrp}, \texttt{low\_spx}
+  \item \texttt{close\_btc}, \texttt{close\_eth}, \texttt{close\_bnb}, \texttt{close\_xrp}, \texttt{close\_spx}
+\end{itemize}
+
+\subsubsection{Wolumen i liczba transakcji}
+
+\begin{itemize}
+  \item \texttt{volume\_btc}, \texttt{volume\_eth}, \texttt{volume\_bnb}, \texttt{volume\_xrp}, \texttt{volume\_spx}
+  \item \texttt{num\_trades\_btc}, \texttt{num\_trades\_eth}, \texttt{num\_trades\_bnb}, \texttt{num\_trades\_xrp}, \texttt{num\_trades\_spx}
+\end{itemize}
+
+\subsubsection{Indeksy globalne}
+
+\begin{itemize}
+  \item \texttt{gdp}
+  \item \texttt{unrate}
+\end{itemize}
+
+\subsection{Budowa modelu}
+
+Rozpoczynając pracę nad modelem, zdecydowaliśmy, że najważniejszymi parametrami naszego modelu będą:
+
+\begin{itemize}
+  \item \texttt{max\_depth} - ogranicza głębokość drzewa
+  \item \texttt{min\_samples\_leaf} -  minimalna liczba próbek w liściu
+  \item \texttt{max\_features} - liczba cech, które bierze pod uwagę pojedyncze drzewo
+  \item \texttt{n\_estimators} -  liczba drzew w lesie
+  \item \texttt{max\_samples} - liczba próbek, na których uczy się każde drzewo
+  \item \texttt{criterion} -  funkcja oceniająca jakość podziału
+\end{itemize}
+
+Dlatego właśnie to optymalizacją tych parametrów zajęliśmy się w pierwszej kolejności.
+
+\subsection{Pierwsze wnioski i problemy}
+
+Wstępna optymalizacja metodą \textbf{Grid Search} wykazała niepokojące tendencje. Model dążył do tworzenia skrajnie płytkich lasów, co sugerowało wysoki poziom szumu w danych.
+
+\begin{verbatim}
+=== BEST MODEL FROM GRID SEARCH ===
+Best hyperparameters:
+  max_depth: 3
+  min_samples_leaf: 300
+  max_features: log2
+  n_estimators: 50
+  max_samples: 0.5
+\end{verbatim}
+
+Zaniepokoiły nas następujące rzeczy:
+\begin{itemize}
+  \item \textbf{Płytkie drzewa} --- Drzewa o maksymalnej głębokości 3 (\texttt{max\_depth: 3}), nie pozwalają na wykrycie złożonych zależności i reguł między danymi.
+  \item \textbf{Mało drzew} --- Większa liczba drzew (\texttt{n\_estimators: 50}) nie przynosi poprawy, co sugeruje, że dane są mocno zaszumione.
+  \item \textbf{Duża liczba próbek na liściach} --- Wysoka liczba próbek (\texttt{min\_samples\_leaf: 300}) sprawia, że las mocno uśrednia predykcje i nie wykrywa nowych, krótkoterminowych trendów.
+\end{itemize}
+
+W związku z tym, zdecydowaliśmy, że problem stanowią wykorzystywane przez nas dane, które wprowadzają szum do naszego modelu.
+
+\subsection{Przetworzenie i dodanie nowych cech}
+
+Aby wyeliminować szum i dostarczyć modelowi bardziej czytelne sygnały, dokonaliśmy transformacji danych, wprowadzając nowe grupy cech:
+
+\subsubsection{Zwroty z cen \texttt{ret\_}}
+
+\begin{itemize}
+  \item \texttt{ret\_close\_*} -  dzienna zmiana ceny zamknięcia danego rynku (np. BTC, ETH, SPX) wyrażona jako różnica między dniem bieżącym, a poprzednim.
+  \item \texttt{ret\_hl\_*} - analogiczny wskaźnik liczony dla ceny uśrednionej z danego dnia (średnia z wartości high i low).
+\end{itemize}
+
+\subsubsection{Aktywność na rynku \texttt{dlog}}
+
+\begin{itemize}
+  \item \texttt{dlog\_volume\_sum} - zmiana łącznego wolumenu obrotu na wszystkich rynkach w skali logarytmicznej (dzień do dnia).
+  \item \texttt{dlog\_num\_trades\_sum} - odpowiednik powyższej miary dla łącznej liczby transakcji na rynku kryptowalut.
+\end{itemize}
+
+\subsubsection{Wartości wygładzone \texttt{ewm}}
+
+Czyli trend w aktywności rynku zamiast dziennego szumu.
+\begin{itemize}
+  \item \texttt{ewm\_ret\_close\_*} i \texttt{ewm\_ret\_hl2\_*} - wykładniczo ważona średnia zwrotów cen, gdzie nowsze obserwacje mają większą wagę niż starsze (lepsze odwzorowanie aktualnego trendu).
+  \item \texttt{ewm\_dlog\_volume\_sum\_*} i \texttt{ewm\_dlog\_num\_trades\_sum\_*} -  identyczna metoda wygładzania zastosowana dla zmian wolumenu i liczby transakcji.
+\end{itemize}
+
+\subsubsection{Zmienność \texttt{roll\_std}}
+
+\begin{itemize}
+  \item \texttt{roll\_std\_ret\_close\_btc\_*} - miara zmienności rynku, liczona jako odchylenie standardowe zwrotów BTC w ruchomym oknie czasowym (np. 7, 21 dni).
+\end{itemize}
+
+\subsubsection{Makro \texttt{gdp}, \texttt{unrate}}
+
+\begin{itemize}
+  \item \texttt{gdp\_lag1}, \texttt{gdp\_growth}, \texttt{unrate\_lag1}, \texttt{unrate\_change} -  poziomy i zmiany PKB oraz bezrobocia z poprzednich okresów. Używamy wartości opóźnionych (lag), ponieważ dane te publikowane są rzadziej. Dzięki temu chronimy model przed wyciekiem danych z przyszłości (data leakage).
+\end{itemize}
+
+\subsection{Analiza shap}
+
+Za pomocą narzędzia SHAP przyjrzeliśmy się poszczególnym cechom naszego modelu. 
+
+Na poniższym wykresie przedstawiono 20 cech, które mają największy wpływ na predykcję drzew. Wykres składa się głównie z pionowych kresek - jest to kwestia działania drzew decyzyjnych w modelu Random Forest, które grupują dane i każda grupa dostaje tę samą wartość SHAP. Kilka zmiennych pojawia się \textbf{jako pojedyncza prosta pionowa linia} (np. \texttt{open\_bnb} i \texttt{close\_bnb} na samej górze wykresu). To wskazuje, że te niezależnie od tego, czy ich wartości są niskie (niebieski) czy wysokie (czerwony), model nie wie co z nimi zrobić i traktuje je tak samo. Wprowadzają szum  i powinny zostać wyeliminowane.
+
+\begin{figure}[H]
+  \refstepcounter{figure}
+  \centering
+  \includegraphics[width=0.95\linewidth]{models/shap/shap_report_plots/image.png}
+  \caption*{All features shap summary}
+\end{figure}
+
+W pierwszej kolejności rzucała się w oczy konieczność eliminacji surowych danych giełdowych, takich jak \texttt{open\_\{asset\}}, \texttt{high\_\{asset\}}, \texttt{low\_\{asset\}}, \texttt{close\_\{asset\}}, \texttt{volume\_\{asset\}}, \texttt{num\_trades\_\{asset\}}. Zostały one zamienione lepszymi cechami, obrazującymi zmianę wartości, a nie surowe poziomy.
+
+Kolejnymi cechami, które nie okazały się produktywne są dane makroekonomiczne, takie jak \texttt{gdp}, \texttt{unrate}, \texttt{unrate\_lag1}.
+
+Po eliminacji tych cech, tak prezentuje się wykres podsumowania SHAP:
+
+\begin{figure}[H]
+  \refstepcounter{figure}
+  \centering
+  \includegraphics[width=0.95\linewidth]{models/shap/shap_report_plots/image-2.png}
+  \caption*{Third shap summary}
+\end{figure}
+
+\subsection{Ostateczna wersja modelu}
+
+Finalnie postanowiliśmy skupić się na danych opisujących \textbf{zmianę} cen (\texttt{ret\_close\_} czy \texttt{ret\_hl2\_}), zamiast surowych wartości. Wykorzystaliśmy także cechy wygładzone (\texttt{ewm\_ret\_close\_} czy \texttt{ewm\_ret\_hl2\_}) i zsumowane dla różnych walut (\texttt{dlog\_num\_trades\_sum}, \texttt{dlog\_volume\_sum}). Ostateczny model uzyskał na zbiorze testowym wynik \texttt{MAE} \(\approx 0.01679\) oraz \texttt{RMSE} \(\approx 0.02330\).
+
+Lista cech:
+\begin{itemize}
+  \item \texttt{ret\_close\_bnb},
+  \item \texttt{ret\_close\_btc}, 
+  \item \texttt{ret\_close\_eth}, 
+  \item \texttt{ret\_close\_spx}, 
+  \item \texttt{ret\_close\_xrp},
+  \item \texttt{ret\_hl2\_bnb}, 
+  \item \texttt{ret\_hl2\_btc}, 
+  \item \texttt{ret\_hl2\_eth}, 
+  \item \texttt{ret\_hl2\_spx}, 
+  \item \texttt{ret\_hl2\_xrp},
+  \item \texttt{ewm\_dlog\_num\_trades\_sum\_s7}, 
+  \item \texttt{ewm\_dlog\_volume\_sum\_s7},
+  \item \texttt{ewm\_ret\_close\_bnb\_s7}, 
+  \item \texttt{ewm\_ret\_close\_btc\_s7}, 
+  \item \texttt{ewm\_ret\_close\_eth\_s7}, 
+  \item \texttt{ewm\_ret\_close\_spx\_s7}, 
+  \item \texttt{ewm\_ret\_close\_xrp\_s7},
+  \item \texttt{ewm\_ret\_hl2\_bnb\_s7}, 
+  \item \texttt{ewm\_ret\_hl2\_btc\_s7}, 
+  \item \texttt{ewm\_ret\_hl2\_eth\_s7}, 
+  \item \texttt{ewm\_ret\_hl2\_spx\_s7}, 
+  \item \texttt{ewm\_ret\_hl2\_xrp\_s7},
+  \item \texttt{dlog\_num\_trades\_sum}, 
+  \item \texttt{dlog\_volume\_sum},
+  \item \texttt{gdp\_growth}, 
+  \item \texttt{unrate\_change}, 
+  \item \texttt{ret\_btc}
+\end{itemize}
+
+A także parametrów:
+\begin{verbatim}
+n_estimators=100,
+max_depth=5,
+min_samples_leaf=200,
+max_features="log2",
+max_samples=0.3,
+\end{verbatim}
+
+\section{LSTM (Long Short-Term Memory) - dokumentacja modelu}
+
+\subsection{Cel modelu}
+
+Model LSTM prognozuje \textbf{1-step ahead log-return BTC na następny dzień}:
+
+\begin{itemize}
+  \item \texttt{ret\_btc\_next = log(close\_btc).diff().shift(-1)}
+\end{itemize}
+
+Nie przewidujemy poziomu ceny (niestacjonarnego), tylko \textbf{zwrot}. Na etapie inferencji zwrot przeliczamy na poziom ceny:
+
+\begin{itemize}
+  \item \texttt{pred\_close = last\_close * exp(pred\_ret)}
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Dane i cechy wejściowe}
+
+\subsubsection{Źródło danych}
+
+\begin{itemize}
+  \item \texttt{backend/data/historical\_data.parquet}
+\end{itemize}
+
+Zawiera szeregi dla:
+
+\begin{itemize}
+  \item krypto: BTC, ETH, BNB, XRP
+  \item indeks: SPX
+  \item makro: GDP, UNRATE
+\end{itemize}
+
+\subsubsection{Feature engineering (ten sam kierunek co RF/TFT)}
+
+Celem FE jest dostarczenie sygnałów opisujących \textbf{zmiany i trend}, zamiast surowych poziomów.
+
+\begin{enumerate}
+  \item Zwroty cen (\texttt{ret\_})
+
+  \begin{itemize}
+    \item \texttt{ret\_close\_*} - log-return close
+    \item \texttt{ret\_hl2\_*} - log-return \texttt{hl2 = (high + low)/2}
+  \end{itemize}
+
+  \item Aktywność rynku (\texttt{dlog})
+
+  \begin{itemize}
+    \item \texttt{volume\_sum} (suma wolumenów dla BTC/ETH/BNB/XRP/SPX)
+    \item \texttt{num\_trades\_sum} (suma liczby transakcji dla BTC/ETH/BNB/XRP)
+    \item \texttt{dlog\_volume\_sum = log1p(volume\_sum).diff()}
+    \item \texttt{dlog\_num\_trades\_sum = log1p(num\_trades\_sum).diff()}
+  \end{itemize}
+
+  \item Wygładzanie trendu (\texttt{ewm}, span=7)
+
+  \begin{itemize}
+    \item \texttt{ewm\_ret\_close\_*\_s7}, \texttt{ewm\_ret\_hl2\_*\_s7}
+    \item \texttt{ewm\_dlog\_volume\_sum\_s7}, \texttt{ewm\_dlog\_num\_trades\_sum\_s7}
+  \end{itemize}
+
+  EWM liczone na serii opóźnionej (\texttt{shift=1}), żeby cechy w dniu \emph{t} korzystały wyłącznie z historii do \emph{t-1}.
+
+  \item Makro (bez wycieku danych)
+
+  \begin{itemize}
+    \item \texttt{gdp\_growth = (gdp.shift(1)).pct\_change()}
+    \item \texttt{unrate\_change = unrate.shift(1) - unrate.shift(2)}
+  \end{itemize}
+\end{enumerate}
+
+\medskip\hrule\medskip
+
+\subsection{Zestaw cech używany w modelu (26)}
+
+Model używa 26 kolumn (FEATURE\_COLUMNS):
+
+\begin{itemize}
+  \item \texttt{ret\_close\_\{bnb, btc, eth, spx, xrp\}}
+  \item \texttt{ret\_hl2\_\{bnb, btc, eth, spx, xrp\}}
+  \item \texttt{ewm\_ret\_close\_\{bnb, btc, eth, spx, xrp\}\_s7}
+  \item \texttt{ewm\_ret\_hl2\_\{bnb, btc, eth, spx, xrp\}\_s7}
+  \item \texttt{dlog\_volume\_sum}, \texttt{dlog\_num\_trades\_sum}
+  \item \texttt{ewm\_dlog\_volume\_sum\_s7}, \texttt{ewm\_dlog\_num\_trades\_sum\_s7}
+  \item \texttt{gdp\_growth}, \texttt{unrate\_change}
+\end{itemize}
+
+Target:
+
+\begin{itemize}
+  \item \texttt{ret\_btc\_next}
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Budowa sekwencji (lookback window)}
+
+LSTM dostaje sekwencje o długości \texttt{lookback = L}:
+
+\begin{itemize}
+  \item \texttt{X[i] = df[i : i+L, feature\_cols] -> shape (L, n\_features)}
+  \item \texttt{y[i] = df[i+L-1, ret\_btc\_next] (target przypisany do końca okna)}
+\end{itemize}
+
+Interpretacja:
+
+\begin{itemize}
+  \item ``ostatnie \textbf{L dni} cech'' -> ``zwrot \textbf{jutro}''.
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Split i preprocessing (bez leakage)}
+
+\begin{enumerate}
+  \item Sortowanie i czyszczenie
+
+  \begin{itemize}
+    \item dane sortowane po \texttt{open\_time}
+    \item usuwane wiersze z brakami po FE + budowie targetu
+  \end{itemize}
+
+  \item Podział train/val
+
+  \begin{itemize}
+    \item split chronologiczny: \texttt{train = [:split\_idx]}, \texttt{val = [split\_idx:]}
+    \item brak shuffla (zachowujemy realizm szeregów czasowych)
+  \end{itemize}
+
+  \item Skalowanie cech (StandardScaler)
+
+  \begin{itemize}
+    \item \texttt{mean/std} liczone \textbf{wyłącznie na train}
+    \item transformacja stosowana na train i val
+  \end{itemize}
+
+  \item Skalowanie targetu (włączone w finalnym runie)
+
+  \begin{itemize}
+    \item \texttt{ret\_btc\_next} standaryzowany na train (\texttt{z-score})
+    \item predykcja jest odskalowywana do skali zwrotu przed przeliczeniem na cenę
+  \end{itemize}
+\end{enumerate}
+
+\medskip\hrule\medskip
+
+\subsection{Architektura}
+
+\subsubsection{Warstwa sekwencyjna}
+
+\begin{itemize}
+  \item \texttt{nn.LSTM(input\_size=n\_features, hidden\_size=hidden\_size, num\_layers=num\_layers, batch\_first=True)}
+  \item dropout w LSTM aktywny tylko dla \texttt{num\_layers > 1}
+\end{itemize}
+
+\subsubsection{Głowica regresyjna}
+
+\begin{itemize}
+  \item bierzemy wektor z ostatniego kroku: \texttt{out[:, -1, :]}
+  \item MLP: \texttt{Linear -> ReLU -> Dropout -> Linear(..., 1)}
+  \item wynik: pojedyncza wartość \texttt{pred\_ret\_btc\_next}
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Trening (najważniejsze elementy)}
+
+\begin{itemize}
+  \item loss: \texttt{L1Loss} (raportujemy MAE)
+  \item optymalizator: \texttt{AdamW(lr, weight\_decay)}
+  \item scheduler: \texttt{ReduceLROnPlateau} na \texttt{val\_mae}
+  \item gradient clipping: \texttt{grad\_clip = 1.0}
+  \item early stopping: zatrzymanie po \texttt{patience} epokach bez poprawy \texttt{val\_mae}
+  \item zapisywany jest najlepszy checkpoint (wg \texttt{val\_mae})
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Ostateczna wersja modelu (MAE, hiperparametry, wnioski)}
+
+\subsubsection{Konfiguracja finalnego runu}
+
+\begin{itemize}
+  \item \texttt{lookback = 96}, \texttt{seed = 314}
+  \item \texttt{hidden\_size = 64}, \texttt{num\_layers = 2}, \texttt{dropout = 0.15}
+  \item \texttt{batch\_size = 64}
+  \item \texttt{lr = 8e-4}, \texttt{weight\_decay = 5e-4}
+  \item \texttt{epochs = 100}, \texttt{patience = 15}
+  \item \texttt{target\_scaling = True}
+  \item \texttt{n\_features = 26}
+\end{itemize}
+
+\subsubsection{Wynik na walidacji (MAE)}
+
+\begin{itemize}
+  \item \textbf{Best val MAE:} \texttt{0.015704}
+\end{itemize}
+
+\subsubsection{Interpretacja przebiegu uczenia}
+
+\begin{itemize}
+  \item walidacja poprawia się głównie na początku treningu, a najlepszy wynik pojawia się wcześnie
+  \item później widoczna jest stabilizacja/pogorszenie \texttt{val\_mae}, mimo dalszego spadku \texttt{train\_mae}
+\end{itemize}
+
+W praktyce oznacza to, że model szybko ``wyciąga'' dostępny sygnał, a dalsze uczenie zwiększa dopasowanie do danych treningowych bez poprawy uogólniania.
+
+\medskip\hrule\medskip
+
+\subsection{Uzasadnienie doboru hiperparametrów}
+
+\begin{itemize}
+  \item \texttt{lookback=96}: kompromis między zbyt krótkim kontekstem (szum) a zbyt długim (wyższe ryzyko overfitu i niestabilności).
+  \item \texttt{hidden\_size=64}: umiarkowana pojemność; wystarczająca do modelowania relacji między wieloma cechami, bez nadmiernego ``rozrostu'' modelu.
+  \item \texttt{num\_layers=2}: daje większą ekspresję niż 1 warstwa, a jednocześnie jest bezpieczniejsze niż głębsze RNN w noisy danych.
+  \item \texttt{dropout=0.15} + \texttt{weight\_decay=5e-4}: regularizacja dobrana pod obserwację, że najlepsze \texttt{val\_mae} pojawia się wcześnie (czyli potrzebujemy kontroli nad overfitem).
+  \item \texttt{lr=8e-4} + \texttt{AdamW}: szybkie zejście z błędem w pierwszych epokach przy stabilnym treningu; scheduler dodatkowo ``hamuje'', gdy walidacja przestaje się poprawiać.
+  \item \texttt{target\_scaling=True} + \texttt{grad\_clip=1.0}: stabilizacja treningu (skalowanie amplitudy celu + kontrola gradientów w LSTM).
+\end{itemize}
+
+\section{TFT (Temporal Fusion Transformer) - eksperymenty i uzasadnienie hiperparametrów}
+
+\subsection{Cel modelu}
+
+Model TFT trenujemy do prognozy ceny close bitcoina 1 krok do przodu. Pipeline jest przygotowany pod rolling backtest na zbiorze testowym, z metrykami:
+
+\begin{itemize}
+  \item MAE
+  \item RMSE
+\end{itemize}
+
+Dodatkowo porównujemy go do naiwniego baseline.
+
+\medskip\hrule\medskip
+
+\subsection{Dane i cechy}
+
+\subsubsection{Źródło danych}
+
+Dataset zawiera:
+
+\begin{itemize}
+  \item kolumnę czasu: \texttt{open\_time}
+  \item target: \texttt{TARGET\_COLUMN}
+  \item cechy bazowe: \texttt{FEATURE\_COLUMNS}
+\end{itemize}
+
+\subsubsection{Feature engineering: cechy kalendarzowe cykliczne}
+
+Do danych dodawane są cechy czasowe (cykliczne, sin/cos):
+
+\begin{itemize}
+  \item dzień tygodnia (\texttt{dow\_sin}, \texttt{dow\_cos})
+  \item tydzień roku (\texttt{week\_sin}, \texttt{week\_cos})
+\end{itemize}
+
+To jest kluczowe, bo:
+
+\begin{itemize}
+  \item model dostaje sygnał sezonowości bez numerków (np. \texttt{week=1..52}),
+  \item sin/cos zachowuje cykliczność (np. tydzień 52 jest blisko tygodnia 1).
+\end{itemize}
+
+\subsubsection{Time index w Darts}
+
+Zamiast timestampów, budowany jest indeks kroków:
+
+\begin{itemize}
+  \item \texttt{\_t = 0..N-1}
+\end{itemize}
+
+I dopiero na tym powstają szeregi czasowe Darts:
+
+\begin{itemize}
+  \item \texttt{target: TimeSeries(value\_cols=[TARGET\_COLUMN])}
+  \item \texttt{past\_covariates: TimeSeries(value\_cols=FEATURE\_COLUMNS + time\_features)}
+\end{itemize}
+
+To jest w porządku, bo model i tak działa sekwencyjnie, a prawdziwy czas jest zakodowany w cechach kalendarzowych + względnym indeksie.
+
+\medskip\hrule\medskip
+
+\subsection{Podział danych}
+
+\subsubsection{Train/Test}
+
+Split jest prosty, chronologiczny:
+
+\begin{itemize}
+  \item \texttt{split\_idx = int(n * (1 - test\_size))}
+  \item train = \texttt{[:split\_idx]}
+  \item test = \texttt{[split\_idx:]}
+\end{itemize}
+
+\subsubsection{Train/Val wewnątrz train}
+
+Walidacja jest wycinana z końcówki traina (\texttt{val\_ratio}), z zabezpieczeniami na minimalne długości:
+
+\begin{itemize}
+  \item val ma minimum \texttt{max(10, output\_chunk\_length + 2)}
+  \item train musi mieć minimum \texttt{input\_chunk\_length + output\_chunk\_length + 5}
+\end{itemize}
+
+To jest ważne, bo TFT wymaga sensownego kontekstu sekwencji.
+
+\medskip\hrule\medskip
+
+\subsection{Skalowanie}
+
+Skalowanie jest robione tylko na train (to poprawnie unika data leakage):
+
+\begin{itemize}
+  \item osobny scaler dla \texttt{target}
+  \item osobny scaler dla \texttt{past\_covariates}
+\end{itemize}
+
+W praktyce:
+
+\begin{itemize}
+  \item model trenuje na znormalizowanych seriach,
+  \item metryki liczone są po inverse\_transform, więc MAE/RMSE są w skali oryginalnej.
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Model}
+
+\subsubsection{Konstrukcja}
+
+Używany jest \texttt{darts.models.TFTModel} z:
+
+\begin{itemize}
+  \item \texttt{add\_relative\_index=True}
+  \item \texttt{loss\_fn = nn.MSELoss()}
+  \item \texttt{likelihood=None} (czyli deterministycznie, bez probabilistyki)
+  \item trener Lightning na CPU (\texttt{accelerator="cpu"}, \texttt{devices=1})
+  \item early stopping: monitor \texttt{val\_loss}
+\end{itemize}
+
+\subsubsection{Dlaczego \texttt{add\_relative\_index=True} pomaga?}
+
+Bo przy indeksie \texttt{\_t=0..N-1} model dostaje dodatkową informację o pozycji w oknie wejściowym. To poprawia stabilność uczenia, szczególnie gdy:
+
+\begin{itemize}
+  \item sygnał w cechach jest podobny w różnych fragmentach historii,
+  \item chcemy, żeby model odróżniał dawne vs świeższe punkty w kontekście.
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Ewaluacja: rolling 1-step ahead (historyczne prognozy)}
+
+Test liczony jest metodą zbliżoną do rzeczywistego przewidywania:
+
+\begin{itemize}
+  \item start od \texttt{max(split\_idx, input\_chunk\_length, len(target) - max\_points)}
+  \item \texttt{forecast\_horizon=1}
+  \item \texttt{stride = eval\_stride}
+  \item \texttt{retrain=False}
+  \item \texttt{last\_points\_only=True}
+\end{itemize}
+
+To daje realistyczny obraz jakości w symulacji działania produkcyjnego.
+
+\medskip\hrule\medskip
+
+\subsection{Tryby eksperymentów}
+
+\subsubsection{Single run}
+
+Trening jednego zestawu hiperparametrów i zapis artefaktów:
+
+\begin{itemize}
+  \item \texttt{tft\_model} (Darts save)
+  \item \texttt{scalers.joblib}
+  \item \texttt{metadata.json} z configiem i listą covariatów
+\end{itemize}
+
+\subsubsection{Grid search}
+
+Dwa tryby:
+
+\begin{itemize}
+  \item \texttt{GRID\_MODE="full"}: pełna siatka kombinacji (z constraintem \texttt{hidden\_size \% num\_attention\_heads == 0})
+  \item \texttt{GRID\_MODE="random"}: losowe próby unikalnych kombinacji
+\end{itemize}
+
+Kryterium wyboru best:
+
+\begin{itemize}
+  \item najmniejsze MAE na rolling teście
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Przestrzeń przeszukiwania (SearchSpace)}
+
+Testowane były:
+
+\begin{itemize}
+  \item \texttt{input\_chunk\_length}: (30, 60, 90)
+  \item \texttt{hidden\_size}: (16, 96)
+  \item \texttt{lstm\_layers}: (2,)
+  \item \texttt{num\_attention\_heads}: (1, 4)
+  \item \texttt{dropout}: (0.0, 0.2)
+  \item \texttt{lr}: (3e-4, 1e-3)
+  \item \texttt{batch\_size}: (64,)
+\end{itemize}
+
+Constraint:
+
+\begin{itemize}
+  \item \texttt{hidden\_size \% num\_attention\_heads == 0}
+  czyli (16, 4) i (96, 4) są ok, ale np. (16, 3) byłoby odrzucone.
+\end{itemize}
+
+\medskip\hrule\medskip
+
+\subsection{Uzasadnienie: dlaczego wybrane hiperparametry zadziałały najlepiej}
+
+\subsubsection{1) \texttt{output\_chunk\_length = 1} (stałe)}
+
+To ma sens, bo cała ewaluacja i pipeline są zrobione pod jednopunktową predykcję.
+Dla returnów często najlepsza jakość jest właśnie dla 1 kroku, bo błędy nie kumulują się jak w multi-step.
+
+\subsubsection{2) \texttt{input\_chunk\_length} w zakresie 30-90}
+
+To jest balans między:
+
+\begin{itemize}
+  \item za krótko (np. \texttt{< 20-30}): model nie widzi kontekstu, a attention/LSTM nie mają z czego wyciągać wzorców
+  \item za długo (np. dużo powyżej 90): dla returnów zwykle nie ma stabilnych zależności dalekiego zasięgu, a długi kontekst podnosi wariancję i ułatwia overfit
+\end{itemize}
+
+\subsubsection{3) \texttt{hidden\_size} = 16 vs 96 (mały vs większy model)}
+
+To wprost kontroluje pojemność. Im mniejszy hidden\_size, tym większa odporność na szum i mniejsze dopasowanie.
+
+\subsubsection{4) \texttt{lstm\_layers = 2}}
+
+Dwie warstwy LSTM w TFT powinny dawać rozsądną reprezentację sekwencji, z niewielkim ryzykiem overfitu.
+
+\subsubsection{5) \texttt{num\_attention\_heads} = 1 lub 4}
+
+Heads kontrolują, ile różnych perspektyw attention może utrzymać.
+
+\begin{itemize}
+  \item 1 head: prostszy model, mniejsze ryzyko overfitu, często lepszy gdy dane są noisy.
+  \item 4 heads: model może równolegle patrzeć na różne fragmenty kontekstu (np. inne cechy/okresy).
+\end{itemize}
+
+\subsubsection{6) \texttt{dropout} = 0.0 albo 0.2}
+
+Im bardziej skomplikowany model, tym większy dropout ma sens.
+
+\subsubsection{7) \texttt{lr} = 3e-4 albo 1e-3}
+
+\subsubsection{8) \texttt{batch\_size = 64}}
+
+\subsection{Dlaczego te ustawienia najlepiej zadziałały?}
+
+W tym problemie największym wrogiem jest overfit i udawana przewidywalność. Sprawdziłem w zasadzie model mniejszy i większy. Liczyłem na to, że mniejszy, prostszy model lepiej zgeneralizuje i nie będzie miał zbyt dużego overfitu i chyba się to nawet udało - w końcu tft miał najlepszy wynik ze wszystkich naszych modeli.
+
+\end{document}
