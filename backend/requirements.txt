@@ -7,3 +7,5 @@ pandas
 pyarrow
 joblib
 scikit-learn
+torch
+darts
