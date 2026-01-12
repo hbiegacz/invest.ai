@@ -9,3 +9,6 @@ joblib
 scikit-learn
 torch
 darts
+pytest
+pytest-django
+pytest-mock
