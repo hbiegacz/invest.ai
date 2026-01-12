@@ -1,0 +1,397 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.3cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[polish]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+
+\usepackage{enumitem}
+\setlist[itemize]{leftmargin=*, itemsep=2pt, topsep=2pt}
+\setlist[enumerate]{leftmargin=*, itemsep=2pt, topsep=2pt}
+
+\usepackage{xcolor}
+\usepackage{listings}
+\lstdefinestyle{runbook}{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=fullflexible,
+  frame=single,
+  rulecolor=\color{black!20},
+  framerule=0.6pt,
+  framesep=6pt,
+  backgroundcolor=\color{black!2},
+  showstringspaces=false
+}
+\lstset{style=runbook}
+
+\usepackage{tcolorbox}
+\tcbset{
+  colback=black!2,
+  colframe=black!15,
+  arc=2mm,
+  boxrule=0.6pt,
+  left=6pt,right=6pt,top=6pt,bottom=6pt
+}
+
+\title{\vspace{-0.5cm}\textbf{Instrukcja - Frontend / Backend / Models / Tests}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-0.6cm}
+
+\section{1) Frontend (React + TS + Vite)}
+
+\begin{tcolorbox}
+\textbf{Lokalizacja:} \texttt{./frontend/} \\
+\textbf{UI:} jedna strona \texttt{/} (\textbf{Analiza}) z 2 wykresami:
+\begin{itemize}
+  \item BTC candlestick (Binance) + punkt predykcji z wybranego modelu
+  \item wykres słupkowy dla wybranej metryki (dropdown)
+\end{itemize}
+\end{tcolorbox}
+
+\subsection*{Uruchomienie (lokalnie)}
+\begin{lstlisting}[language=bash]
+cd frontend
+npm install
+npm run dev
+\end{lstlisting}
+
+Wejdź na adres z konsoli (zwykle) \texttt{http://localhost:5173}.
+
+\begin{tcolorbox}
+\textbf{Backend wymagany pod:} \texttt{http://localhost:8000/marketdata} \\
+Stała: \texttt{API\_BASE} w \texttt{frontend/src/pages/Analysis.tsx}
+\end{tcolorbox}
+
+\subsection*{Uruchomienie (Docker)}
+\begin{lstlisting}[language=bash]
+docker compose up --build
+\end{lstlisting}
+
+Budowanie/start: \texttt{frontend/Dockerfile}, start wspiera \texttt{frontend/docker/entrypoint.sh}.
+
+\subsection*{Jak UI mapuje się na API}
+\begin{itemize}
+  \item Wejście na stronę:
+    \begin{itemize}
+      \item \texttt{GET /marketdata/historical-data/?years\_back=2}
+    \end{itemize}
+
+  \item Kliknięcie \textbf{Uruchom model}:
+    \begin{itemize}
+      \item \texttt{GET /marketdata/<endpoint-modelu>/}
+      \item wynik \texttt{close\_btc} jest wyświetlany jako liczba + punkt predykcji na wykresie BTC
+    \end{itemize}
+
+  \item Dropdown metryk (drugi wykres):
+    \begin{itemize}
+      \item wybór metryki z danych historycznych (np. \texttt{close\_btc}, \texttt{volume\_eth}, \texttt{gdp}, \texttt{unrate}, \dots)
+    \end{itemize}
+\end{itemize}
+
+\subsection*{Szybka mapa kodu}
+\begin{itemize}
+  \item \texttt{frontend/src/App.tsx} - routing + layout (nagłówek/stopka)
+  \item \texttt{frontend/src/pages/Analysis.tsx} - fetch danych, wykresy, zoom-sync, uruchamianie modeli
+  \item \texttt{frontend/src/main.tsx} - bootstrap React
+  \item \texttt{frontend/src/index.css} + \texttt{tailwind.config.js} - Tailwind
+\end{itemize}
+
+\subsection*{Typowe problemy}
+\begin{itemize}
+  \item CORS / brak danych: backend musi działać na \texttt{:8000} i mieć ścieżki \texttt{/marketdata/...}
+  \item Komunikat „Brak danych z endpointu historical-data.": backend zwraca pustą listę albo request nie dochodzi (sprawdź logi backendu i URL)
+\end{itemize}
+
+\section{2) Backend (Django API: marketdata + inferencja)}
+
+\begin{tcolorbox}
+\textbf{Cel:} API do danych rynkowych + inferencja modeli ML. \\
+\textbf{Brak "biznesowej" DB:} \texttt{models.py} jest puste; aplikacja jest w praktyce plikowo-obliczeniowa.
+\end{tcolorbox}
+
+\subsection*{Stack (minimum)}
+\begin{itemize}
+  \item Django 5.x + DRF (\texttt{APIView}, \texttt{Response})
+  \item \texttt{django-cors-headers}
+  \item \texttt{requests}, \texttt{pandas}/\texttt{numpy}/\texttt{pyarrow}, \texttt{joblib}, \texttt{torch}, \texttt{darts} (+ Lightning dla TFT)
+\end{itemize}
+
+\begin{tcolorbox}
+\textbf{Uwaga praktyczna:} dopisz \texttt{rest\_framework} do \texttt{INSTALLED\_APPS} dla przewidywalności środowiska testowego i DRF.
+\end{tcolorbox}
+
+\subsection*{Uruchomienie (Docker)}
+\begin{lstlisting}[language=bash]
+docker compose up --build
+\end{lstlisting}
+Backend typowo wystawia: \texttt{0.0.0.0:8000}.
+
+\subsection*{Uruchomienie (lokalnie)}
+\begin{lstlisting}[language=bash]
+pip install -r backend/requirements.txt
+# wymagane dla FRED:
+export FRED_API_KEY="..."
+python backend/manage.py runserver 8000
+\end{lstlisting}
+
+\subsection*{Routing}
+\begin{itemize}
+  \item \texttt{/admin/}
+  \item \texttt{/marketdata/} $\rightarrow$ \texttt{backend/marketdata/urls.py}
+\end{itemize}
+
+\subsection*{Endpointy (skrót)}
+
+\subsubsection*{Testy źródeł}
+\begin{itemize}
+  \item \texttt{GET /marketdata/binance-test/} - BTC ticker/price
+  \item \texttt{GET /marketdata/coinmetrics-test/} - ostatni ReferenceRateUSD
+  \item \texttt{GET /marketdata/fred-test/} - UNRATE + GDP (wymaga \texttt{FRED\_API\_KEY})
+  \item \texttt{GET /marketdata/stooq-test/} - SPX (CSV $\rightarrow$ lista rekordów)
+\end{itemize}
+
+\subsubsection*{Dane historyczne}
+
+\paragraph{1) \texttt{GET /marketdata/historical-data/}}
+\textbf{Query:}
+\begin{itemize}
+  \item \texttt{years\_back} (domyślnie 10)
+  \item \texttt{exclude} (wiele razy i/lub CSV w jednym)
+  \item \texttt{parquet} = \texttt{1|true|yes|y} $\rightarrow$ generuje plik parquet zamiast zwracać dane
+  \item \texttt{filename} (domyślnie \texttt{historical\_data.parquet})
+\end{itemize}
+
+\textbf{Przykłady:}
+\begin{itemize}
+  \item generacja parquet: \texttt{/marketdata/historical-data/?years\_back=5\&parquet=true}
+  \item zwrot danych: \texttt{/marketdata/historical-data/?years\_back=2}
+  \item wykluczenia: \texttt{/marketdata/historical-data/?years\_back=2\&exclude=volume\_btc,volume\_eth}
+\end{itemize}
+
+\paragraph{2) \texttt{GET /marketdata/get-historical-data/}}
+\textbf{Query:}
+\begin{itemize}
+  \item \texttt{metrics} (wymagane): \texttt{close\_btc,volume\_btc,...}
+  \item \texttt{refresh}: \texttt{true|1|yes} $\rightarrow$ wymusza regenerację parquet
+  \item \texttt{years\_back} (przy regeneracji; domyślnie 10)
+\end{itemize}
+
+\textbf{Zwraca:} lista \texttt{\{ open\_time, ...requested\_metrics \}} \\
+\textbf{Przykład:} \texttt{/marketdata/get-historical-data/?metrics=close\_btc,volume\_btc,low\_btc,open\_btc\&years\_back=5}
+
+\subsubsection*{Modele ML (predykcja \texttt{close\_btc})}
+\begin{itemize}
+  \item \texttt{GET /marketdata/naive-model/} - \texttt{\{ "close\_btc": last\_close \}}
+  \item \texttt{GET /marketdata/linear-regression-model/} - LR przewiduje return $\rightarrow$ \texttt{pred\_close = last\_close * (1 + ret\_pred)}
+  \item \texttt{GET /marketdata/random-forest-model/} - RF przewiduje log-return $\rightarrow$ \texttt{pred\_close = last\_close * exp(ret\_pred)}
+  \item \texttt{GET /marketdata/lstm-model/}
+  \item \texttt{GET /marketdata/tft-model/}
+\end{itemize}
+
+\subsection*{Serwisy (odpowiedzialności)}
+\begin{itemize}
+  \item \texttt{HistoricalDataService.py}
+  \begin{itemize}
+    \item pobiera i scala: Binance (OHLCV), Stooq (SPX), FRED (GDP/UNRATE)
+    \item zapis: \texttt{backend/data/historical\_data.parquet}
+  \end{itemize}
+
+  \item \texttt{DataReaderService.py}
+  \begin{itemize}
+    \item szybki odczyt Parquet + auto-refresh:
+    \begin{itemize}
+      \item freshness: \texttt{DATA\_FRESHNESS\_HOURS = 24}
+      \item coverage check względem \texttt{years\_back}
+    \end{itemize}
+    \item czyta tylko wymagane kolumny (\texttt{pd.read\_parquet(columns=...)})
+  \end{itemize}
+
+  \item \texttt{ModelService.py}
+  \begin{itemize}
+    \item dba o świeżość danych + feature engineering + inferencja z artefaktów
+  \end{itemize}
+\end{itemize}
+
+\subsection*{Artefakty / zależności spójności}
+\begin{tcolorbox}
+\textbf{Źródło prawdy dla inferencji:} \texttt{backend/data/historical\_data.parquet} + artefakty modeli. \\
+Zmiana kolumn/nazw w generatorze danych $\rightarrow$ ryzyko błędów \texttt{Missing columns...} w modelach.
+\end{tcolorbox}
+
+\subsection*{„Co gdzie zmieniać"}
+\begin{itemize}
+  \item nowe źródło danych / aktywo: \texttt{HistoricalDataService.*} (symbole, \texttt{desired\_cols})
+  \item polityka świeżości: \texttt{DataReaderService.DATA\_FRESHNESS\_HOURS}
+  \item nowy endpoint modelu: \texttt{views.py} + \texttt{urls.py} + metoda w \texttt{ModelService}
+  \item nowa metryka do frontu: musi istnieć w parquet i być uwzględniona w \texttt{desired\_cols}
+\end{itemize}
+
+\section{3) Models (trening + artefakty)}
+
+\begin{tcolorbox}
+\textbf{Lokalizacja:} \texttt{./models/} \\
+\textbf{Wejście danych:} \texttt{backend/data/historical\_data.parquet} \\
+\textbf{Wyjście:} artefakty do \texttt{backend/data/} wykorzystywane przez backend (\texttt{ModelService}).
+\end{tcolorbox}
+
+\subsection*{Konwencja targetu}
+Większość modeli nie przewiduje ceny, tylko \textbf{zwrot na kolejny dzień} (\texttt{ret\_btc\_next}), potem backend mapuje to na cenę \texttt{close\_btc}.
+
+\begin{itemize}
+  \item log-return wariant: \texttt{pred\_close = last\_close * exp(pred\_ret)}
+  \item LR wariant (pct\_change): \texttt{pred\_close = last\_close * (1 + pred\_ret)}
+\end{itemize}
+
+\subsection*{Artefakty (lokalizacje)}
+\begin{itemize}
+  \item \texttt{backend/data/linear\_regression\_btc.pkl}
+  \item \texttt{backend/data/random\_forest\_btc.pkl}
+  \item \texttt{backend/data/lstm\_btc.pt}
+  \item \texttt{backend/data/tft\_btc/} (katalog)
+\end{itemize}
+
+\subsection*{Skrypty (minimum co robią)}
+\begin{itemize}
+  \item \texttt{models/linear\_regression\_train.py}
+  \begin{itemize}
+    \item pipeline: \texttt{StandardScaler -> (LinearRegression|Ridge|Lasso)}
+    \item target: pct\_change + shift(-1)
+    \item split: chronologiczny
+    \item zapis: \texttt{linear\_regression\_btc.pkl} (model + features + target)
+  \end{itemize}
+
+  \item \texttt{models/random\_forest\_train.py}
+  \begin{itemize}
+    \item feature engineering: log-zwroty, EWM, rolling std, agregaty volume/trades, lagi makro
+    \item tryb: grid albo single
+    \item zapis: \texttt{random\_forest\_btc.pkl} (model + features + target)
+  \end{itemize}
+
+  \item \texttt{models/lstm\_train.py}
+  \begin{itemize}
+    \item sekwencje \texttt{(N, lookback, n\_features)}, skalery zapisane w artefakcie
+    \item zapis: \texttt{lstm\_btc.pt} (cfg + scaler + state\_dict + metryki)
+  \end{itemize}
+
+  \item \texttt{models/tft\_train.py}
+  \begin{itemize}
+    \item Darts TFT: \texttt{target=ret\_btc\_next}, \texttt{past\_covariates} + time features
+    \item zapis: \texttt{tft\_btc/} (metadata + scalers + model)
+  \end{itemize}
+
+  \item \texttt{models/shap\_analysis.py}
+  \begin{itemize}
+    \item SHAP dla RF, wykresy do \texttt{models/shap/plots/}
+  \end{itemize}
+\end{itemize}
+
+\subsection*{Wymóg krytyczny (utrzymanie)}
+\begin{tcolorbox}
+\textbf{Feature engineering w treningu musi być identyczny jak w inferencji.} \\
+Zmiana FE $\rightarrow$ retraining + aktualizacja artefaktów w \texttt{backend/data/}.
+\end{tcolorbox}
+
+\subsection*{Dodanie nowego modelu (checklista)}
+\begin{enumerate}
+  \item \texttt{models/<new>\_train.py}: load parquet $\rightarrow$ FE + \texttt{ret\_btc\_next} $\rightarrow$ trening $\rightarrow$ zapis do \texttt{backend/data/}
+  \item Backend: metoda w \texttt{ModelService} + view w \texttt{marketdata/views.py} + route w \texttt{marketdata/urls.py}
+  \item (Opcjonalnie) raport/interpretowalność (SHAP/permutation importance)
+\end{enumerate}
+
+\section{4) Tests (pytest)}
+
+\begin{tcolorbox}
+\textbf{Lokalizacja:} \texttt{backend/marketdata/tests/} \\
+\textbf{Typy:} unit (serwisy) + lekkie API (views). Integracje zewnętrzne izolowane przez mocki (\texttt{requests.get}, \texttt{pd.read\_parquet}, itd.).
+\end{tcolorbox}
+
+\subsection*{Struktura}
+\begin{itemize}
+  \item \texttt{test\_binance\_service.py}
+  \item \texttt{test\_coinmetrics\_service.py}
+  \item \texttt{test\_stooq\_service.py}
+  \item \texttt{test\_fred\_service.py}
+  \item \texttt{test\_data\_reader\_service.py}
+  \item \texttt{test\_historical\_data\_service.py}
+  \item \texttt{test\_model\_service.py}
+  \item \texttt{test\_views.py}
+\end{itemize}
+
+\subsection*{Uruchamianie (lokalnie)}
+\begin{lstlisting}[language=bash]
+cd backend
+pip install -r requirements.txt
+pytest -q
+\end{lstlisting}
+
+\subsection*{Uruchamianie (Docker)}
+\begin{lstlisting}[language=bash]
+docker compose exec <backend_service_name> pytest -q
+\end{lstlisting}
+
+\subsection*{Zakres (co jest sprawdzane)}
+
+\subsubsection*{Serwisy zewnętrzne}
+\begin{itemize}
+  \item sukces (200) $\rightarrow$ poprawne parsowanie
+  \item błąd $\rightarrow$ propagacja przez \texttt{raise\_for\_status()} / \texttt{HTTPError}
+  \item FRED: brak \texttt{FRED\_API\_KEY} $\rightarrow$ \texttt{ValueError}, puste obserwacje $\rightarrow$ \texttt{N/A}
+\end{itemize}
+
+\subsubsection*{Parquet / odświeżanie}
+\begin{itemize}
+  \item logika "starości" pliku (\texttt{\_is\_data\_old})
+  \item auto-refresh gdy plik nieaktualny
+  \item filtrowanie do \texttt{years\_back}
+\end{itemize}
+
+\subsubsection*{Generator danych}
+\begin{itemize}
+  \item \texttt{\_apply\_exclusions} (bez naruszania \texttt{open\_time})
+  \item mapowanie Stooq $\rightarrow$ spójne nazwy kolumn
+  \item batch fetching (mock \texttt{\_fetch})
+  \item zapis \texttt{.parquet} do \texttt{backend/data}
+\end{itemize}
+
+\subsubsection*{ModelService}
+\begin{itemize}
+  \item \texttt{naive()} zwraca ostatni \texttt{close\_btc}
+  \item zachowanie dla pustych danych $\rightarrow$ \texttt{ValueError}
+  \item LR predykcja na ostatnim wierszu (najświeższy rekord)
+  \item obecność krytycznych kolumn dla RF (\texttt{\_rf\_base\_columns()})
+\end{itemize}
+
+\subsubsection*{Views (API)}
+\begin{itemize}
+  \item \texttt{/marketdata/binance-test/} - 200 + payload przy mocku
+  \item \texttt{/marketdata/historical-data/} - walidacja \texttt{years\_back} (400 dla nieliczbowej)
+  \item \texttt{/marketdata/get-historical-data/} - \texttt{metrics} wymagane (400 przy braku)
+  \item \texttt{/marketdata/naive-model/} - 200 baseline
+  \item \texttt{/marketdata/linear-regression-model/} - obsługa braku pliku modelu (500 + komunikat)
+\end{itemize}
+
+\subsection*{Techniki izolacji}
+\begin{itemize}
+  \item \texttt{mocker.patch("requests.get", ...)}
+  \item \texttt{mocker.patch("pandas.read\_parquet", ...)}
+  \item \texttt{tmp\_path} dla testów zapisu plików
+  \item kontrola czasu/\texttt{mtime} (symulacja "starości" danych)
+\end{itemize}
+
+\subsection*{Wymagania środowiska testowego}
+\begin{itemize}
+  \item wymagane biblioteki: \texttt{djangorestframework}, \texttt{pytest}
+  \item praktycznie: \texttt{rest\_framework} w \texttt{INSTALLED\_APPS}
+  \item zapis/odczyt parquet: działający backend parquet (np. \texttt{pyarrow})
+\end{itemize}
+
+\end{document}
