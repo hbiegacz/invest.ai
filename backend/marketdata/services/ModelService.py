@@ -197,71 +197,57 @@ class ModelService:
     def _load_lstm_artifact(self) -> dict:
         if self._lstm_artifact_cache is not None:
             return self._lstm_artifact_cache
-
         try:
             import torch
         except Exception as e:
             raise RuntimeError(f"torch is required for LSTM inference but could not be imported: {e}")
-
         model_path = Path(settings.BASE_DIR) / "data" / "lstm_btc.pt"
         if not model_path.exists():
             raise FileNotFoundError(f"LSTM artifact not found at: {model_path}")
-
         artifact = torch.load(model_path, map_location="cpu")
         self._lstm_artifact_cache = artifact
         return artifact
 
     def lstm_model(self, force_refresh: bool = False) -> float:
-        """
-        Predicts next close_btc using the saved PyTorch LSTM artifact.
-        Returns predicted close price (not return).
-        """
         self._ensure_fresh_file_if_needed(force_refresh=force_refresh)
-
         artifact = self._load_lstm_artifact()
-
         try:
             import torch
             import torch.nn as nn
         except Exception as e:
             raise RuntimeError(f"torch is required for LSTM inference but could not be imported: {e}")
-
         cfg = artifact.get("cfg")
         scaler = artifact.get("scaler")
         state = artifact.get("model_state")
-
+        target_scaler = artifact.get("target_scaler", {"enabled": False, "mean_": 0.0, "std_": 1.0})
         if not cfg or not scaler or not state:
             raise ValueError("Invalid LSTM artifact: missing 'cfg', 'scaler' or 'model_state'.")
-
         lookback = int(cfg["lookback"])
         hidden_size = int(cfg["hidden_size"])
         num_layers = int(cfg["num_layers"])
         dropout = float(cfg["dropout"])
-
         feature_cols = list(scaler["feature_cols"])
         mean_ = np.array(scaler["mean_"], dtype=np.float64)
         std_ = np.array(scaler["std_"], dtype=np.float64)
-
         if len(feature_cols) != len(mean_) or len(feature_cols) != len(std_):
             raise ValueError("Invalid LSTM scaler state: mean/std length mismatch with feature_cols.")
-
-        cols_to_read = list(dict.fromkeys(feature_cols + ["open_time", "close_btc"]))
-        df = self._read_parquet(columns=cols_to_read)
-        if df.empty:
+        df_raw = self._read_parquet(columns=self._rf_base_columns())
+        if df_raw.empty:
             raise ValueError("No data available in historical_data.parquet for LSTM model.")
-
-        self._require_columns(df, cols_to_read)
-
-        df = df.sort_values("open_time").reset_index(drop=True)
-        if len(df) < lookback:
-            raise ValueError(f"Not enough rows for LSTM inference. need>={lookback}, have={len(df)}")
-
-        df_last = df.iloc[-lookback:].copy()
-
+        spans, _ = self._parse_rf_spans_windows(feature_cols)
+        if not spans:
+            spans = [7]
+        df_feat = self._compute_common_features(df_raw, spans=spans, vol_windows=[])
+        df_feat = df_feat.sort_values("open_time").reset_index(drop=True)
+        df_feat = df_feat.dropna(subset=feature_cols).reset_index(drop=True)
+        if len(df_feat) < lookback:
+            raise ValueError(f"Not enough rows for LSTM inference. need>={lookback}, have={len(df_feat)}")
+        df_last = df_feat.iloc[-lookback:].copy()
         X = df_last.loc[:, feature_cols].astype(float).to_numpy(dtype=np.float64)
         X = (X - mean_) / std_
+        if not np.isfinite(X).all():
+            raise ValueError("LSTM features contain NaN/inf after scaling (check data + FE).")
         X = X.astype(np.float32).reshape(1, lookback, len(feature_cols))
-
         class LSTMRegressor(nn.Module):
             def __init__(self, n_features: int, hidden_size: int, num_layers: int, dropout: float):
                 super().__init__()
@@ -273,16 +259,15 @@ class ModelService:
                     batch_first=True,
                 )
                 self.head = nn.Sequential(
-                    nn.Linear(hidden_size, hidden_size),
+                    nn.Linear(hidden_size, hidden_size // 2),
                     nn.ReLU(),
-                    nn.Linear(hidden_size, 1),
+                    nn.Dropout(dropout),
+                    nn.Linear(hidden_size // 2, 1),
                 )
-
             def forward(self, x):
                 out, _ = self.lstm(x)
                 last = out[:, -1, :]
                 return self.head(last).squeeze(-1)
-
         model = LSTMRegressor(
             n_features=len(feature_cols),
             hidden_size=hidden_size,
@@ -291,13 +276,21 @@ class ModelService:
         )
         model.load_state_dict(state)
         model.eval()
-
         with torch.no_grad():
-            pred_ret = float(model(torch.from_numpy(X)).cpu().item())
-
-        last_close = float(df_last["close_btc"].iloc[-1])
-        predicted_close = last_close * math.exp(pred_ret)
+            pred_scaled = float(model(torch.from_numpy(X)).cpu().item())
+        if bool(target_scaler.get("enabled", False)):
+            y_mean = float(target_scaler.get("mean_", 0.0))
+            y_std = float(target_scaler.get("std_", 1.0)) or 1.0
+            pred_ret = pred_scaled * y_std + y_mean
+        else:
+            pred_ret = pred_scaled
+        last_close = float(df_feat["close_btc"].iloc[-1])
+        try:
+            predicted_close = last_close * math.exp(pred_ret)
+        except OverflowError:
+            raise ValueError(f"Overflow in exp(pred_ret). pred_ret={pred_ret}")
         return float(predicted_close)
+
 
     def _load_tft_artifact(self) -> dict:
         if self._tft_artifact_cache is not None:
