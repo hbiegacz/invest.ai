@@ -1,5 +1,6 @@
 import requests
 
+
 class CoinmetricsAPIService:
     BASE_URL = "https://community-api.coinmetrics.io/v4/"
 
@@ -11,7 +12,7 @@ class CoinmetricsAPIService:
         response = requests.get(url, params=params, timeout=self.timeout)
         response.raise_for_status()
         return response.json()
-    
+
     def get_reference_rate(self):
         endpoint = "timeseries/asset-metrics"
         params = {
@@ -19,7 +20,7 @@ class CoinmetricsAPIService:
             "metrics": "ReferenceRateUSD",
             "frequency": "1d",
             "limit_per_asset": 1,
-            "page_size": 1
+            "page_size": 1,
         }
         data = self._get(endpoint, params=params)
         return data

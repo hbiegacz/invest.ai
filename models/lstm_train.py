@@ -76,7 +76,9 @@ class StandardScalerState:
         mean_ = X.mean(axis=0)
         std_ = X.std(axis=0)
         std_ = np.where(std_ < 1e-12, 1.0, std_)
-        return StandardScalerState(mean_=mean_, std_=std_, feature_cols=tuple(feature_cols))
+        return StandardScalerState(
+            mean_=mean_, std_=std_, feature_cols=tuple(feature_cols)
+        )
 
 
 def set_seed(seed: int) -> None:
@@ -108,7 +110,9 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     volume_cols = [f"volume_{a}" for a in ALL_ASSETS if f"volume_{a}" in out.columns]
     if volume_cols:
         out["volume_sum"] = out[volume_cols].sum(axis=1)
-    trades_cols = [f"num_trades_{a}" for a in CRYPTO_ASSETS if f"num_trades_{a}" in out.columns]
+    trades_cols = [
+        f"num_trades_{a}" for a in CRYPTO_ASSETS if f"num_trades_{a}" in out.columns
+    ]
     if trades_cols:
         out["num_trades_sum"] = out[trades_cols].sum(axis=1)
     for a in ALL_ASSETS:
@@ -131,9 +135,13 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         if rh in out.columns:
             out[f"ewm_ret_hl2_{a}_s{span}"] = _ewm_mean(out[rh], span=span, shift=1)
     if "dlog_volume_sum" in out.columns:
-        out[f"ewm_dlog_volume_sum_s{span}"] = _ewm_mean(out["dlog_volume_sum"], span=span, shift=1)
+        out[f"ewm_dlog_volume_sum_s{span}"] = _ewm_mean(
+            out["dlog_volume_sum"], span=span, shift=1
+        )
     if "dlog_num_trades_sum" in out.columns:
-        out[f"ewm_dlog_num_trades_sum_s{span}"] = _ewm_mean(out["dlog_num_trades_sum"], span=span, shift=1)
+        out[f"ewm_dlog_num_trades_sum_s{span}"] = _ewm_mean(
+            out["dlog_num_trades_sum"], span=span, shift=1
+        )
     if "gdp" in out.columns:
         gdp_lag1 = out["gdp"].shift(1)
         out["gdp_growth"] = gdp_lag1.pct_change()
@@ -185,7 +193,9 @@ class SequenceDataset(Dataset):
 
 
 class LSTMRegressor(nn.Module):
-    def __init__(self, n_features: int, hidden_size: int, num_layers: int, dropout: float):
+    def __init__(
+        self, n_features: int, hidden_size: int, num_layers: int, dropout: float
+    ):
         super().__init__()
         self.lstm = nn.LSTM(
             input_size=n_features,
@@ -220,12 +230,14 @@ def train_lstm(df_raw: pd.DataFrame, cfg: LSTMConfig) -> dict:
     df_train = df.iloc[:split_idx].copy()
     df_val = df.iloc[split_idx:].copy()
     scaler = StandardScalerState.fit(df_train, cfg.feature_cols)
+
     def apply_scaler(d: pd.DataFrame) -> pd.DataFrame:
         out = d.copy()
         cols = list(cfg.feature_cols)
         X = out[cols].to_numpy(dtype=np.float64)
         out[cols] = scaler.transform(X).astype(np.float32)
         return out
+
     df_train = apply_scaler(df_train)
     df_val = apply_scaler(df_val)
     X_tr, y_tr = make_sequences(df_train, cfg.feature_cols, cfg.target, cfg.lookback)
@@ -257,8 +269,12 @@ def train_lstm(df_raw: pd.DataFrame, cfg: LSTMConfig) -> dict:
         num_layers=cfg.num_layers,
         dropout=cfg.dropout,
     ).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, mode="min", factor=0.5, patience=5)
+    opt = torch.optim.AdamW(
+        model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
+    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        opt, mode="min", factor=0.5, patience=5
+    )
     loss_fn = nn.L1Loss()
     best_val_mae = float("inf")
     best_state = None
@@ -278,7 +294,7 @@ def train_lstm(df_raw: pd.DataFrame, cfg: LSTMConfig) -> dict:
             if cfg.grad_clip and cfg.grad_clip > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
             opt.step()
-            tr_abs_sum += (torch.abs(pred - yb).sum().item() * mae_scale)
+            tr_abs_sum += torch.abs(pred - yb).sum().item() * mae_scale
             tr_count += yb.numel()
         model.eval()
         va_abs_sum = 0.0
@@ -288,14 +304,16 @@ def train_lstm(df_raw: pd.DataFrame, cfg: LSTMConfig) -> dict:
                 Xb = Xb.to(device)
                 yb = yb.to(device)
                 pred = model(Xb)
-                va_abs_sum += (torch.abs(pred - yb).sum().item() * mae_scale)
+                va_abs_sum += torch.abs(pred - yb).sum().item() * mae_scale
                 va_count += yb.numel()
         tr_mae = tr_abs_sum / max(1, tr_count)
         va_mae = va_abs_sum / max(1, va_count)
         scheduler.step(va_mae)
         if va_mae < best_val_mae:
             best_val_mae = va_mae
-            best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            best_state = {
+                k: v.detach().cpu().clone() for k, v in model.state_dict().items()
+            }
             no_improve = 0
         else:
             no_improve += 1
@@ -348,10 +366,16 @@ def predict_next_close(df_raw: pd.DataFrame, artifact: dict) -> float:
     df = build_target_ret_btc_next(df, close_col=cfg.close_col)
     df = df.dropna(subset=list(cfg.feature_cols)).reset_index(drop=True)
     if len(df) < cfg.lookback:
-        raise ValueError(f"Not enough rows for inference lookback window. Have {len(df)}, need {cfg.lookback}")
-    df_last = df.iloc[-cfg.lookback:].copy()
+        raise ValueError(
+            f"Not enough rows for inference lookback window. Have {len(df)}, need {cfg.lookback}"
+        )
+    df_last = df.iloc[-cfg.lookback :].copy()
     X = df_last.loc[:, cfg.feature_cols].astype(float).to_numpy()
-    X = scaler.transform(X).astype(np.float32).reshape(1, cfg.lookback, len(cfg.feature_cols))
+    X = (
+        scaler.transform(X)
+        .astype(np.float32)
+        .reshape(1, cfg.lookback, len(cfg.feature_cols))
+    )
     device = torch.device(cfg.device)
     model = LSTMRegressor(
         n_features=len(cfg.feature_cols),
@@ -379,7 +403,11 @@ if __name__ == "__main__":
     ROOT = Path(__file__).resolve().parents[1]
     parquet_path = ROOT / "backend" / "data" / "historical_data.parquet"
     out_path = ROOT / "backend" / "data" / "lstm_btc.pt"
-    df = pd.read_parquet(parquet_path, engine="pyarrow").sort_values("open_time").reset_index(drop=True)
+    df = (
+        pd.read_parquet(parquet_path, engine="pyarrow")
+        .sort_values("open_time")
+        .reset_index(drop=True)
+    )
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # best_val_mae=0.015663
     cfg = LSTMConfig(

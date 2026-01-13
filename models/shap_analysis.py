@@ -1,4 +1,13 @@
-from random_forest_train import load_dataset, FEATURE_COLUMNS, TARGET_COLUMN, SINGLE_RF_PARAMS, base_rf_params, build_model, train_model, print_metrics
+from random_forest_train import (
+    load_dataset,
+    FEATURE_COLUMNS,
+    TARGET_COLUMN,
+    SINGLE_RF_PARAMS,
+    base_rf_params,
+    build_model,
+    train_model,
+    print_metrics,
+)
 import matplotlib.pyplot as plt
 from pathlib import Path
 import pandas as pd
@@ -11,7 +20,7 @@ from sklearn.model_selection import train_test_split
 OUTPUT_DIR = Path("shap/plots")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-# 1. LOAD DATA 
+# 1. LOAD DATA
 # ============================================================================
 print("1. Loading dataset...")
 try:
@@ -26,7 +35,7 @@ y = df[TARGET_COLUMN]
 
 print(f"   Features selected ({len(FEATURE_COLUMNS)}): {FEATURE_COLUMNS}")
 
-# 2. TRAIN RANDOM FOREST MODEL 
+# 2. TRAIN RANDOM FOREST MODEL
 # ============================================================================
 print("2. Training Random Forest Model...")
 _, X_test, _, _ = train_test_split(X, y, test_size=0.2, shuffle=False)
@@ -46,7 +55,7 @@ shap_values = explainer(X_test, check_additivity=False)
 
 # SCALE THE VALUES
 # ============================================================================
-# Since the values the model predicts are rather small, 
+# Since the values the model predicts are rather small,
 # we scale them by 100, so that when we look at the plots we dont just see +0 and -0
 # it makes the plots more redable
 
@@ -75,10 +84,10 @@ print("5. Generating Decision Plot (Stacked Waterfall alternative)...")
 try:
     plt.figure(figsize=(10, 10))
     shap.decision_plot(
-        shap_values.base_values[0],  
-        shap_values.values[:20],     
-        X_test.iloc[:20],            
-        show=False
+        shap_values.base_values[0],
+        shap_values.values[:20],
+        X_test.iloc[:20],
+        show=False,
     )
     plt.tight_layout()
     plt.savefig(OUTPUT_DIR / "shap_decision_plot.png")
@@ -93,26 +102,26 @@ print("6. Generating Force Plot (single)...")
 try:
     plt.figure(figsize=(20, 3))
     shap.force_plot(
-        explainer.expected_value * 100, # scaling again
-        shap_values.values[0], 
-        X_test.iloc[0], 
+        explainer.expected_value * 100,  # scaling again
+        shap_values.values[0],
+        X_test.iloc[0],
         matplotlib=True,
-        show=False
+        show=False,
     )
-    plt.savefig(OUTPUT_DIR / "shap_force_plot_0.png", bbox_inches='tight', dpi=150)
+    plt.savefig(OUTPUT_DIR / "shap_force_plot_0.png", bbox_inches="tight", dpi=150)
     plt.close()
     print("   Saved shap_force_plot_0.png")
 except Exception as e:
     print(f"   Error generating force plot: {e}")
 
-# 7. BAR PLOT 
+# 7. BAR PLOT
 # ============================================================================
 print("7. Generating Bar Plot...")
 try:
     plt.figure(figsize=(10, 8))
     shap.plots.bar(shap_values, show=False)
     plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "shap_bar_plot.png", bbox_inches='tight')
+    plt.savefig(OUTPUT_DIR / "shap_bar_plot.png", bbox_inches="tight")
     plt.close()
     print("   Saved shap_bar_plot.png")
 except Exception as e:
@@ -125,7 +134,7 @@ try:
     plt.figure(figsize=(10, 8))
     shap.plots.beeswarm(shap_values, show=False)
     plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "shap_beeswarm_plot.png", bbox_inches='tight')
+    plt.savefig(OUTPUT_DIR / "shap_beeswarm_plot.png", bbox_inches="tight")
     plt.close()
     print("   Saved shap_beeswarm_plot.png")
 except Exception as e:

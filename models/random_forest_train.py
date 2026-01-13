@@ -135,7 +135,8 @@ FEATURE_COLUMNS = BASE_FEATURE_COLUMNS + EWM_FEATURE_COLUMNS + VOL_FEATURE_COLUM
 
 if DROP_VOLUME_TRADES:
     FEATURE_COLUMNS = [
-        c for c in FEATURE_COLUMNS
+        c
+        for c in FEATURE_COLUMNS
         if c not in ("dlog_volume_sum", "dlog_num_trades_sum")
         and not c.startswith("ewm_dlog_volume_sum_")
         and not c.startswith("ewm_dlog_num_trades_sum_")
@@ -145,32 +146,32 @@ if DROP_VOLUME_TRADES:
 # Allows manual override of the feature list
 MANUAL_FEATURE_COLUMNS = [
     "ret_close_bnb",
-    "ret_close_btc", 
-    "ret_close_eth", 
-    "ret_close_spx", 
+    "ret_close_btc",
+    "ret_close_eth",
+    "ret_close_spx",
     "ret_close_xrp",
-    "ret_hl2_bnb", 
-    "ret_hl2_btc", 
-    "ret_hl2_eth", 
-    "ret_hl2_spx", 
+    "ret_hl2_bnb",
+    "ret_hl2_btc",
+    "ret_hl2_eth",
+    "ret_hl2_spx",
     "ret_hl2_xrp",
-    "ewm_dlog_num_trades_sum_s7", 
+    "ewm_dlog_num_trades_sum_s7",
     "ewm_dlog_volume_sum_s7",
-    "ewm_ret_close_bnb_s7", 
-    "ewm_ret_close_btc_s7", 
-    "ewm_ret_close_eth_s7", 
-    "ewm_ret_close_spx_s7", 
+    "ewm_ret_close_bnb_s7",
+    "ewm_ret_close_btc_s7",
+    "ewm_ret_close_eth_s7",
+    "ewm_ret_close_spx_s7",
     "ewm_ret_close_xrp_s7",
-    "ewm_ret_hl2_bnb_s7", 
-    "ewm_ret_hl2_btc_s7", 
-    "ewm_ret_hl2_eth_s7", 
-    "ewm_ret_hl2_spx_s7", 
+    "ewm_ret_hl2_bnb_s7",
+    "ewm_ret_hl2_btc_s7",
+    "ewm_ret_hl2_eth_s7",
+    "ewm_ret_hl2_spx_s7",
     "ewm_ret_hl2_xrp_s7",
-    "dlog_num_trades_sum", 
+    "dlog_num_trades_sum",
     "dlog_volume_sum",
-    "gdp_growth", 
-    "unrate_change", 
-    "ret_btc"
+    "gdp_growth",
+    "unrate_change",
+    "ret_btc",
 ]
 if "MANUAL_FEATURE_COLUMNS" in locals() and MANUAL_FEATURE_COLUMNS:
     FEATURE_COLUMNS = MANUAL_FEATURE_COLUMNS
@@ -233,6 +234,7 @@ def _dlog1p(series: pd.Series) -> pd.Series:
     """
     return np.log1p(series).diff()
 
+
 def _ewm_mean(series: pd.Series, span: int, shift: int = 1) -> pd.Series:
     """
     Exponentially weighted moving average computed from past values only.
@@ -242,6 +244,7 @@ def _ewm_mean(series: pd.Series, span: int, shift: int = 1) -> pd.Series:
     s = series.shift(shift)
     return s.ewm(span=span, adjust=False).mean()
 
+
 def _rolling_std(series: pd.Series, window: int, shift: int = 1) -> pd.Series:
     """
     Rolling std computed from past values only (shift=1).
@@ -249,6 +252,7 @@ def _rolling_std(series: pd.Series, window: int, shift: int = 1) -> pd.Series:
     """
     s = series.shift(shift)
     return s.rolling(window=window, min_periods=window).std()
+
 
 def parse_monotonic_cst(value: str | None) -> list[int] | None:
     """
@@ -303,14 +307,24 @@ def load_dataset(debug_samples: int = 0) -> pd.DataFrame:
     df["dlog_num_trades_sum"] = _dlog1p(df["num_trades_sum"])
     for span in EWM_SPANS:
         for a in ALL_ASSETS:
-            df[f"ewm_ret_close_{a}_s{span}"] = _ewm_mean(df[f"ret_close_{a}"], span=span, shift=1)
-            df[f"ewm_ret_hl2_{a}_s{span}"] = _ewm_mean(df[f"ret_hl2_{a}"], span=span, shift=1)
+            df[f"ewm_ret_close_{a}_s{span}"] = _ewm_mean(
+                df[f"ret_close_{a}"], span=span, shift=1
+            )
+            df[f"ewm_ret_hl2_{a}_s{span}"] = _ewm_mean(
+                df[f"ret_hl2_{a}"], span=span, shift=1
+            )
 
-        df[f"ewm_dlog_volume_sum_s{span}"] = _ewm_mean(df["dlog_volume_sum"], span=span, shift=1)
-        df[f"ewm_dlog_num_trades_sum_s{span}"] = _ewm_mean(df["dlog_num_trades_sum"], span=span, shift=1)
-    
+        df[f"ewm_dlog_volume_sum_s{span}"] = _ewm_mean(
+            df["dlog_volume_sum"], span=span, shift=1
+        )
+        df[f"ewm_dlog_num_trades_sum_s{span}"] = _ewm_mean(
+            df["dlog_num_trades_sum"], span=span, shift=1
+        )
+
     for w in VOL_WINDOWS:
-        df[f"roll_std_ret_close_btc_w{w}"] = _rolling_std(df["ret_close_btc"], window=w, shift=1)
+        df[f"roll_std_ret_close_btc_w{w}"] = _rolling_std(
+            df["ret_close_btc"], window=w, shift=1
+        )
 
     df["gdp_lag1"] = df["gdp"].shift(1)
     df["unrate_lag1"] = df["unrate"].shift(1)
@@ -443,6 +457,7 @@ def base_rf_params() -> dict:
         "monotonic_cst": parse_monotonic_cst(RF_MONOTONIC_CST_STR),
     }
 
+
 def run_grid_search(df: pd.DataFrame, test_size: float, output_path: Path) -> None:
     """
     Runs the full predefined hyper-grid, prints metrics for each combo,
@@ -507,7 +522,6 @@ def run_grid_search(df: pd.DataFrame, test_size: float, output_path: Path) -> No
 
     if best_model is None or best_params is None or best_metrics is None:
         raise RuntimeError("Grid search did not produce any model.")
-
 
     save_model(best_model, output_path)
 

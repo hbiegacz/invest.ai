@@ -47,6 +47,7 @@ FEATURE_COLUMNS = [
 ]
 TARGET_COLUMN = "ret_btc_next"
 
+
 def load_dataset():
     if not DATA_PATH.exists():
         raise FileNotFoundError(f"Parquet file not found at: {DATA_PATH}")
@@ -65,6 +66,7 @@ def load_dataset():
         raise ValueError("DataFrame is empty after preprocessing.")
     return df
 
+
 def build_pipeline(model_type="ols", alpha=1.0):
     if model_type == "ridge":
         reg = Ridge(alpha=alpha)
@@ -78,6 +80,7 @@ def build_pipeline(model_type="ols", alpha=1.0):
             ("regressor", reg),
         ]
     )
+
 
 def train_model(df, test_size=0.2, model_type="ols", alpha=1.0):
     X = df[FEATURE_COLUMNS].copy()
@@ -101,12 +104,14 @@ def train_model(df, test_size=0.2, model_type="ols", alpha=1.0):
     }
     return pipeline, metrics
 
+
 def compute_naive_metrics(df):
     y_true = df[TARGET_COLUMN]
     y_pred = pd.Series(0.0, index=y_true.index)
     mae = mean_absolute_error(y_true, y_pred)
     rmse = mean_squared_error(y_true, y_pred) ** 0.5
     return {"mae": float(mae), "rmse": float(rmse)}
+
 
 def save_model(pipeline, output_path):
     output_path = Path(output_path)
@@ -118,6 +123,7 @@ def save_model(pipeline, output_path):
         "target_column_in_df": TARGET_COLUMN,
     }
     dump(payload, output_path)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -136,18 +142,19 @@ def parse_args():
         help="Output path for trained model .pkl (default: models/linear_regression_btc.pkl).",
     )
     parser.add_argument(
-    "--model-type",
-    choices=["ols", "ridge", "lasso"],
-    default="ols",
-    help="Which linear model to use."
+        "--model-type",
+        choices=["ols", "ridge", "lasso"],
+        default="ols",
+        help="Which linear model to use.",
     )
     parser.add_argument(
         "--alpha",
         type=float,
         default=1.0,
-        help="Regularization strength for Ridge/Lasso."
+        help="Regularization strength for Ridge/Lasso.",
     )
     return parser.parse_args()
+
 
 def tune_lasso_alpha(df, test_size=0.2, alphas=None):
     if alphas is None:
@@ -172,6 +179,7 @@ def tune_lasso_alpha(df, test_size=0.2, alphas=None):
             best_metrics = metrics
     print(f"\nBest alpha: {best_alpha} (MAE={best_mae:.6f})")
     return best_alpha, best_metrics
+
 
 def main():
     args = parse_args()
@@ -198,6 +206,7 @@ def main():
     print("\nNaive baseline (ret_tomorrow = 0):")
     for k, v in naive_metrics.items():
         print(f"  {k}: {v}")
+
 
 if __name__ == "__main__":
     main()

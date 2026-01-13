@@ -27,10 +27,14 @@ class ModelService:
         Reads parquet with a refresh retry if file is missing.
         """
         try:
-            return pd.read_parquet(self.data_reader.file_path, columns=columns, engine="pyarrow")
+            return pd.read_parquet(
+                self.data_reader.file_path, columns=columns, engine="pyarrow"
+            )
         except FileNotFoundError:
             self.data_reader._refresh_data_file()
-            return pd.read_parquet(self.data_reader.file_path, columns=columns, engine="pyarrow")
+            return pd.read_parquet(
+                self.data_reader.file_path, columns=columns, engine="pyarrow"
+            )
 
     def _require_columns(self, df: pd.DataFrame, cols: list[str]) -> None:
         missing = [c for c in cols if c not in df.columns]
@@ -41,7 +45,9 @@ class ModelService:
         self._ensure_fresh_file_if_needed(force_refresh=force_refresh)
         df = self._read_parquet(columns=["close_btc"])
         if df.empty:
-            raise ValueError("No data available in historical_data.parquet for naive BTC model.")
+            raise ValueError(
+                "No data available in historical_data.parquet for naive BTC model."
+            )
         if "close_btc" not in df.columns:
             raise ValueError("Column 'close_btc' not found in historical_data.parquet.")
         return float(df["close_btc"].iloc[-1])
@@ -61,14 +67,18 @@ class ModelService:
 
         scaler = pipeline.named_steps.get("scaler")
         if scaler is None:
-            raise ValueError("Pipeline does not contain a 'scaler' step named 'scaler'.")
+            raise ValueError(
+                "Pipeline does not contain a 'scaler' step named 'scaler'."
+            )
 
         model_features = list(getattr(scaler, "feature_names_in_", payload["features"]))
         cols_to_read = list(dict.fromkeys(model_features + ["open_time", "close_btc"]))
 
         df = self._read_parquet(columns=cols_to_read)
         if df.empty:
-            raise ValueError("No data available in historical_data.parquet for linear regression model.")
+            raise ValueError(
+                "No data available in historical_data.parquet for linear regression model."
+            )
 
         missing = [c for c in model_features if c not in df.columns]
         if missing:
@@ -94,7 +104,9 @@ class ModelService:
             cols += [f"num_trades_{a}"]
         return list(dict.fromkeys(cols))
 
-    def _parse_rf_spans_windows(self, feature_names: list[str]) -> tuple[list[int], list[int]]:
+    def _parse_rf_spans_windows(
+        self, feature_names: list[str]
+    ) -> tuple[list[int], list[int]]:
         spans = set()
         wins = set()
         span_re = re.compile(r"_s(\d+)$")
@@ -108,7 +120,9 @@ class ModelService:
                 wins.add(int(m.group(1)))
         return sorted(spans), sorted(wins)
 
-    def _compute_common_features(self, df: pd.DataFrame, spans: list[int], vol_windows: list[int]) -> pd.DataFrame:
+    def _compute_common_features(
+        self, df: pd.DataFrame, spans: list[int], vol_windows: list[int]
+    ) -> pd.DataFrame:
         """
         Builds the same style of engineered features as random_forest_train.load_dataset().
         It is intentionally broad, so it can serve RF + TFT.
@@ -122,7 +136,9 @@ class ModelService:
             df[f"hl2_{a}"] = (df[f"low_{a}"] + df[f"high_{a}"]) / 2.0
 
         df["volume_sum"] = df[[f"volume_{a}" for a in assets_all]].sum(axis=1)
-        df["num_trades_sum"] = df[[f"num_trades_{a}" for a in assets_crypto]].sum(axis=1)
+        df["num_trades_sum"] = df[[f"num_trades_{a}" for a in assets_crypto]].sum(
+            axis=1
+        )
 
         for a in assets_all:
             df[f"ret_close_{a}"] = np.log(df[f"close_{a}"].astype(float)).diff()
@@ -140,8 +156,12 @@ class ModelService:
                     df[f"ret_hl2_{a}"].shift(1).ewm(span=span, adjust=False).mean()
                 )
 
-            df[f"ewm_dlog_volume_sum_s{span}"] = df["dlog_volume_sum"].shift(1).ewm(span=span, adjust=False).mean()
-            df[f"ewm_dlog_num_trades_sum_s{span}"] = df["dlog_num_trades_sum"].shift(1).ewm(span=span, adjust=False).mean()
+            df[f"ewm_dlog_volume_sum_s{span}"] = (
+                df["dlog_volume_sum"].shift(1).ewm(span=span, adjust=False).mean()
+            )
+            df[f"ewm_dlog_num_trades_sum_s{span}"] = (
+                df["dlog_num_trades_sum"].shift(1).ewm(span=span, adjust=False).mean()
+            )
 
         for w in vol_windows:
             df[f"roll_std_ret_close_btc_w{w}"] = (
@@ -175,9 +195,13 @@ class ModelService:
 
         df = self._read_parquet(columns=self._rf_base_columns())
         if df.empty:
-            raise ValueError("No data available in historical_data.parquet for random forest model.")
+            raise ValueError(
+                "No data available in historical_data.parquet for random forest model."
+            )
 
-        df_feat = self._compute_common_features(df, spans=spans, vol_windows=vol_windows)
+        df_feat = self._compute_common_features(
+            df, spans=spans, vol_windows=vol_windows
+        )
         last = df_feat.iloc[[-1]]
 
         missing = [c for c in feature_names if c not in last.columns]
@@ -200,7 +224,9 @@ class ModelService:
         try:
             import torch
         except Exception as e:
-            raise RuntimeError(f"torch is required for LSTM inference but could not be imported: {e}")
+            raise RuntimeError(
+                f"torch is required for LSTM inference but could not be imported: {e}"
+            )
         model_path = Path(settings.BASE_DIR) / "data" / "lstm_btc.pt"
         if not model_path.exists():
             raise FileNotFoundError(f"LSTM artifact not found at: {model_path}")
@@ -215,13 +241,19 @@ class ModelService:
             import torch
             import torch.nn as nn
         except Exception as e:
-            raise RuntimeError(f"torch is required for LSTM inference but could not be imported: {e}")
+            raise RuntimeError(
+                f"torch is required for LSTM inference but could not be imported: {e}"
+            )
         cfg = artifact.get("cfg")
         scaler = artifact.get("scaler")
         state = artifact.get("model_state")
-        target_scaler = artifact.get("target_scaler", {"enabled": False, "mean_": 0.0, "std_": 1.0})
+        target_scaler = artifact.get(
+            "target_scaler", {"enabled": False, "mean_": 0.0, "std_": 1.0}
+        )
         if not cfg or not scaler or not state:
-            raise ValueError("Invalid LSTM artifact: missing 'cfg', 'scaler' or 'model_state'.")
+            raise ValueError(
+                "Invalid LSTM artifact: missing 'cfg', 'scaler' or 'model_state'."
+            )
         lookback = int(cfg["lookback"])
         hidden_size = int(cfg["hidden_size"])
         num_layers = int(cfg["num_layers"])
@@ -230,10 +262,14 @@ class ModelService:
         mean_ = np.array(scaler["mean_"], dtype=np.float64)
         std_ = np.array(scaler["std_"], dtype=np.float64)
         if len(feature_cols) != len(mean_) or len(feature_cols) != len(std_):
-            raise ValueError("Invalid LSTM scaler state: mean/std length mismatch with feature_cols.")
+            raise ValueError(
+                "Invalid LSTM scaler state: mean/std length mismatch with feature_cols."
+            )
         df_raw = self._read_parquet(columns=self._rf_base_columns())
         if df_raw.empty:
-            raise ValueError("No data available in historical_data.parquet for LSTM model.")
+            raise ValueError(
+                "No data available in historical_data.parquet for LSTM model."
+            )
         spans, _ = self._parse_rf_spans_windows(feature_cols)
         if not spans:
             spans = [7]
@@ -241,15 +277,22 @@ class ModelService:
         df_feat = df_feat.sort_values("open_time").reset_index(drop=True)
         df_feat = df_feat.dropna(subset=feature_cols).reset_index(drop=True)
         if len(df_feat) < lookback:
-            raise ValueError(f"Not enough rows for LSTM inference. need>={lookback}, have={len(df_feat)}")
+            raise ValueError(
+                f"Not enough rows for LSTM inference. need>={lookback}, have={len(df_feat)}"
+            )
         df_last = df_feat.iloc[-lookback:].copy()
         X = df_last.loc[:, feature_cols].astype(float).to_numpy(dtype=np.float64)
         X = (X - mean_) / std_
         if not np.isfinite(X).all():
-            raise ValueError("LSTM features contain NaN/inf after scaling (check data + FE).")
+            raise ValueError(
+                "LSTM features contain NaN/inf after scaling (check data + FE)."
+            )
         X = X.astype(np.float32).reshape(1, lookback, len(feature_cols))
+
         class LSTMRegressor(nn.Module):
-            def __init__(self, n_features: int, hidden_size: int, num_layers: int, dropout: float):
+            def __init__(
+                self, n_features: int, hidden_size: int, num_layers: int, dropout: float
+            ):
                 super().__init__()
                 self.lstm = nn.LSTM(
                     input_size=n_features,
@@ -264,10 +307,12 @@ class ModelService:
                     nn.Dropout(dropout),
                     nn.Linear(hidden_size // 2, 1),
                 )
+
             def forward(self, x):
                 out, _ = self.lstm(x)
                 last = out[:, -1, :]
                 return self.head(last).squeeze(-1)
+
         model = LSTMRegressor(
             n_features=len(feature_cols),
             hidden_size=hidden_size,
@@ -291,7 +336,6 @@ class ModelService:
             raise ValueError(f"Overflow in exp(pred_ret). pred_ret={pred_ret}")
         return float(predicted_close)
 
-
     def _load_tft_artifact(self) -> dict:
         if self._tft_artifact_cache is not None:
             return self._tft_artifact_cache
@@ -299,7 +343,9 @@ class ModelService:
         try:
             from darts.models import TFTModel
         except Exception as e:
-            raise RuntimeError(f"darts is required for TFT inference but could not be imported: {e}")
+            raise RuntimeError(
+                f"darts is required for TFT inference but could not be imported: {e}"
+            )
 
         tft_dir = Path(settings.BASE_DIR) / "data" / "tft_btc"
         if not tft_dir.exists():
@@ -309,7 +355,11 @@ class ModelService:
         scalers_path = tft_dir / "scalers.joblib"
         model_path = tft_dir / "tft_model"
 
-        if not meta_path.exists() or not scalers_path.exists() or not model_path.exists():
+        if (
+            not meta_path.exists()
+            or not scalers_path.exists()
+            or not model_path.exists()
+        ):
             raise FileNotFoundError(
                 "TFT artifact is incomplete. Expected: metadata.json, scalers.joblib, tft_model"
             )
@@ -352,7 +402,9 @@ class ModelService:
         try:
             from darts import TimeSeries
         except Exception as e:
-            raise RuntimeError(f"darts is required for TFT inference but could not be imported: {e}")
+            raise RuntimeError(
+                f"darts is required for TFT inference but could not be imported: {e}"
+            )
 
         art = self._load_tft_artifact()
         model = art["model"]
@@ -373,32 +425,54 @@ class ModelService:
 
         df_raw = self._read_parquet(columns=self._rf_base_columns())
         if df_raw.empty:
-            raise ValueError("No data available in historical_data.parquet for TFT model.")
+            raise ValueError(
+                "No data available in historical_data.parquet for TFT model."
+            )
 
-        df_feat = self._compute_common_features(df_raw, spans=spans, vol_windows=vol_windows)
+        df_feat = self._compute_common_features(
+            df_raw, spans=spans, vol_windows=vol_windows
+        )
 
-        df_feat["open_time"] = pd.to_datetime(df_feat["open_time"], utc=False, errors="coerce")
+        df_feat["open_time"] = pd.to_datetime(
+            df_feat["open_time"], utc=False, errors="coerce"
+        )
         df_feat = df_feat.dropna(subset=["open_time"]).sort_values("open_time")
-        df_feat = df_feat.drop_duplicates(subset=["open_time"], keep="last").reset_index(drop=True)
+        df_feat = df_feat.drop_duplicates(
+            subset=["open_time"], keep="last"
+        ).reset_index(drop=True)
 
         df_feat, _time_cols = self._add_time_features(df_feat)
 
-        need_cols = list(dict.fromkeys(["open_time", "close_btc"] + features_base + [target_col] + covariates))
+        need_cols = list(
+            dict.fromkeys(
+                ["open_time", "close_btc"] + features_base + [target_col] + covariates
+            )
+        )
         self._require_columns(df_feat, need_cols)
 
-        df_feat = df_feat.dropna(subset=list(dict.fromkeys(features_base + [target_col] + covariates))).reset_index(drop=True)
+        df_feat = df_feat.dropna(
+            subset=list(dict.fromkeys(features_base + [target_col] + covariates))
+        ).reset_index(drop=True)
         if df_feat.empty:
-            raise ValueError("TFT preprocessing produced empty DataFrame (likely too many NaNs after feature engineering).")
+            raise ValueError(
+                "TFT preprocessing produced empty DataFrame (likely too many NaNs after feature engineering)."
+            )
 
         df_feat["_t"] = np.arange(len(df_feat), dtype=np.int64)
 
-        target = TimeSeries.from_dataframe(df_feat, time_col="_t", value_cols=[target_col])
-        past_cov = TimeSeries.from_dataframe(df_feat, time_col="_t", value_cols=covariates)
+        target = TimeSeries.from_dataframe(
+            df_feat, time_col="_t", value_cols=[target_col]
+        )
+        past_cov = TimeSeries.from_dataframe(
+            df_feat, time_col="_t", value_cols=covariates
+        )
 
         target_s = scaler_target.transform(target)
         cov_s = scaler_cov.transform(past_cov)
 
-        pred_s = model.predict(n=1, series=target_s, past_covariates=cov_s, verbose=False)
+        pred_s = model.predict(
+            n=1, series=target_s, past_covariates=cov_s, verbose=False
+        )
         pred = scaler_target.inverse_transform(pred_s)
 
         pred_ret = float(pred.values(copy=False).reshape(-1)[0])

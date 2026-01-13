@@ -1,5 +1,6 @@
 import requests
 
+
 class BinanceAPIService:
     BASE_URL = "https://api.binance.com/api/v3/"
 

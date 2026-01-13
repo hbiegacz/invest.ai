@@ -11,6 +11,7 @@ from .services.HistoricalDataService import HistoricalDataService
 from .services.DataReaderService import DataReaderService
 from .services.ModelService import ModelService
 
+
 class BinanceTestView(APIView):
     def get(self, request, *args, **kwargs):
         service = BinanceAPIService()
@@ -18,8 +19,11 @@ class BinanceTestView(APIView):
             data = service.get_btc_price()
             return Response(data, status=status.HTTP_200_OK)
         except requests.RequestException as e:
-            return Response({"error": "Could not fetch price from Binance API", "details": str(e)},
-                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                {"error": "Could not fetch price from Binance API", "details": str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
 
 class FredTestView(APIView):
     def get(self, request, *args, **kwargs):
@@ -28,9 +32,12 @@ class FredTestView(APIView):
             data = service.get_basic_economic_data()
             return Response(data, status=status.HTTP_200_OK)
         except requests.RequestException as e:
-             return Response({"error": "Could not fetch data from FRED API", "details": str(e)},
-                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        
+            return Response(
+                {"error": "Could not fetch data from FRED API", "details": str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+
 class StooqTestView(APIView):
     def get(self, request, *args, **kwargs):
         service = StooqAPIService()
@@ -38,8 +45,11 @@ class StooqTestView(APIView):
             data = service.get_sp500_data()
             return Response(data, status=status.HTTP_200_OK)
         except requests.RequestException as e:
-            return Response({"error": "Could not fetch data from Stooq API", "details": str(e)},
-                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                {"error": "Could not fetch data from Stooq API", "details": str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
 
 class CoinmetricsTestView(APIView):
     def get(self, request, *args, **kwargs):
@@ -48,9 +58,15 @@ class CoinmetricsTestView(APIView):
             data = service.get_reference_rate()
             return Response(data, status=status.HTTP_200_OK)
         except requests.RequestException as e:
-            return Response({"error": "Could not fetch data from Coinmetrics API", "details": str(e)},
-                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        
+            return Response(
+                {
+                    "error": "Could not fetch data from Coinmetrics API",
+                    "details": str(e),
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+
 class HistoricalDataView(APIView):
     def get(self, request, *args, **kwargs):
         years_back_param = request.query_params.get("years_back", "10")
@@ -93,7 +109,7 @@ class HistoricalDataView(APIView):
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-            
+
 
 class RequestSpecificDataView(APIView):
     """
@@ -102,43 +118,60 @@ class RequestSpecificDataView(APIView):
     - metrics: comma-separated list of columns (e.g., 'close_btc,volume_eth')
     - refresh: 'true' to force regeneration of the data file
     - years_back: optional integer number of years to go back when regenerating the file (default 10)
-    
-    Example: 
+
+    Example:
         /marketdata/get-historical-data/?metrics=close_btc,volume_btc,low_btc,open_btc
         /marketdata/get-historical-data/?metrics=close_btc,volume_btc,low_btc,open_btc&years_back=5
     """
+
     def get(self, request, *args, **kwargs):
         metrics_param = request.query_params.get("metrics", "")
-        refresh_param = request.query_params.get("refresh", "").lower() in ("true", "1", "yes")
+        refresh_param = request.query_params.get("refresh", "").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
         years_back_param = request.query_params.get("years_back", None)
 
         if not metrics_param:
-            return Response({"error": "Parameter 'metrics' is required (e.g. ?metrics=close_btc,volume_eth)"},
-                            status=status.HTTP_400_BAD_REQUEST
+            return Response(
+                {
+                    "error": "Parameter 'metrics' is required (e.g. ?metrics=close_btc,volume_eth)"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         requested_metrics = [m.strip() for m in metrics_param.split(",") if m.strip()]
 
         try:
             years_back = int(years_back_param) if years_back_param else 10
-        except ValueError: 
-            return Response({"error": "Parameter 'years_back' must be an integer."},
-                            status=status.HTTP_400_BAD_REQUEST
+        except ValueError:
+            return Response(
+                {"error": "Parameter 'years_back' must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-            
+
         try:
             service = DataReaderService()
-            data = service.get_market_data( requested_metrics=requested_metrics, force_refresh=refresh_param, years_back=years_back)
+            data = service.get_market_data(
+                requested_metrics=requested_metrics,
+                force_refresh=refresh_param,
+                years_back=years_back,
+            )
             return Response(data, status=status.HTTP_200_OK)
 
         except ValueError as e:
-            return Response( {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST            )
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except RuntimeError as e:
-            return Response({"error": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        except Exception as e:
-            return Response({"error": "An unexpected error occurred", "details": str(e)},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            return Response(
+                {"error": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
+        except Exception as e:
+            return Response(
+                {"error": "An unexpected error occurred", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
 
 class NaiveModelView(APIView):
     def get(self, request, *args, **kwargs):
@@ -161,7 +194,8 @@ class NaiveModelView(APIView):
                 {"error": "Unexpected error in naive model", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        
+
+
 class LinearRegressionModelView(APIView):
     def get(self, request, *args, **kwargs):
         refresh_flag = request.query_params.get("refresh", "").lower() in (
@@ -193,40 +227,69 @@ class LinearRegressionModelView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+
 class RandomForestModelView(APIView):
     def get(self, request, *args, **kwargs):
-        refresh_flag = request.query_params.get("refresh", "").lower() in ("1", "true", "yes", "y")
+        refresh_flag = request.query_params.get("refresh", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "y",
+        )
         service = ModelService()
         try:
             close_btc = service.random_forest(force_refresh=refresh_flag)
             return Response({"close_btc": close_btc}, status=status.HTTP_200_OK)
         except FileNotFoundError as e:
-            return Response({"error": "Trained random forest model not found.", "details": str(e)},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": "Trained random forest model not found.", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": "Unexpected error in random forest BTC model.", "details": str(e)},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {
+                    "error": "Unexpected error in random forest BTC model.",
+                    "details": str(e),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
 
 class LSTMModelView(APIView):
     def get(self, request, *args, **kwargs):
-        refresh_flag = request.query_params.get("refresh", "").lower() in ("1", "true", "yes", "y")
+        refresh_flag = request.query_params.get("refresh", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "y",
+        )
         service = ModelService()
         try:
             close_btc = service.lstm_model(force_refresh=refresh_flag)
             return Response({"close_btc": close_btc}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": "Unexpected error in LSTM placeholder.", "details": str(e)},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": "Unexpected error in LSTM placeholder.", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
 
 class TFTModelView(APIView):
     def get(self, request, *args, **kwargs):
-        refresh_flag = request.query_params.get("refresh", "").lower() in ("1", "true", "yes", "y")
+        refresh_flag = request.query_params.get("refresh", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "y",
+        )
         service = ModelService()
         try:
             close_btc = service.tft_model(force_refresh=refresh_flag)
             return Response({"close_btc": close_btc}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": "Unexpected error in TFT placeholder.", "details": str(e)},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": "Unexpected error in TFT placeholder.", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

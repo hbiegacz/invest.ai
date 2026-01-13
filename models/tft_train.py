@@ -18,7 +18,11 @@ from darts import TimeSeries, concatenate
 from darts.dataprocessing.transformers import Scaler
 from darts.models import TFTModel
 
-from random_forest_train import load_dataset as load_rf_dataset, FEATURE_COLUMNS, TARGET_COLUMN
+from random_forest_train import (
+    load_dataset as load_rf_dataset,
+    FEATURE_COLUMNS,
+    TARGET_COLUMN,
+)
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -115,14 +119,18 @@ def _make_early_stopping_callback(patience: int, min_delta: float):
     try:
         from lightning.pytorch.callbacks import EarlyStopping
 
-        return EarlyStopping(monitor="val_loss", patience=patience, min_delta=min_delta, mode="min")
+        return EarlyStopping(
+            monitor="val_loss", patience=patience, min_delta=min_delta, mode="min"
+        )
     except Exception:
         pass
 
     try:
         from pytorch_lightning.callbacks import EarlyStopping
 
-        return EarlyStopping(monitor="val_loss", patience=patience, min_delta=min_delta, mode="min")
+        return EarlyStopping(
+            monitor="val_loss", patience=patience, min_delta=min_delta, mode="min"
+        )
     except Exception:
         return None
 
@@ -138,7 +146,9 @@ def _pick_pl_trainer_kwargs(cfg: TFTConfig) -> dict:
         pass
 
     callbacks = []
-    cb = _make_early_stopping_callback(cfg.early_stopping_patience, cfg.early_stopping_min_delta)
+    cb = _make_early_stopping_callback(
+        cfg.early_stopping_patience, cfg.early_stopping_min_delta
+    )
     if cb is not None:
         callbacks.append(cb)
 
@@ -195,7 +205,9 @@ def build_timeseries(df: pd.DataFrame) -> tuple[TimeSeries, TimeSeries, list[str
     past_cov = TimeSeries.from_dataframe(d, time_col="_t", value_cols=cov_cols)
 
     if len(target) != len(past_cov):
-        raise RuntimeError(f"target and past_cov lengths differ: {len(target)} vs {len(past_cov)}")
+        raise RuntimeError(
+            f"target and past_cov lengths differ: {len(target)} vs {len(past_cov)}"
+        )
 
     return target, past_cov, cov_cols
 
@@ -235,7 +247,9 @@ def split_train_val(
         val_len = n - train_len
 
     if val_len < min_val:
-        raise ValueError(f"Not enough data for validation split. n={n}, train_len={train_len}, val_len={val_len}.")
+        raise ValueError(
+            f"Not enough data for validation split. n={n}, train_len={train_len}, val_len={val_len}."
+        )
 
     tr_t = train_t[:train_len]
     va_t = train_t[train_len:]
@@ -295,7 +309,9 @@ def evaluate_one_step_ahead(
 
     start_pos = max(int(start_candidate), input_len)
     if start_pos >= len(target_s) - 1:
-        raise RuntimeError(f"Not enough points for evaluation. start_pos={start_pos}, len(target)={len(target_s)}.")
+        raise RuntimeError(
+            f"Not enough points for evaluation. start_pos={start_pos}, len(target)={len(target_s)}."
+        )
 
     start_ts = target_s.time_index[start_pos]
 
@@ -366,7 +382,10 @@ def save_artifact(
     model_path = output_dir / "tft_model"
     model.save(str(model_path))
 
-    dump({"scaler_target": scaler_target, "scaler_cov": scaler_cov}, output_dir / "scalers.joblib")
+    dump(
+        {"scaler_target": scaler_target, "scaler_cov": scaler_cov},
+        output_dir / "scalers.joblib",
+    )
 
     metadata = {
         "cfg": asdict(cfg),
@@ -376,7 +395,9 @@ def save_artifact(
         "darts_model_path": str(model_path),
         "time_index": "range_index_steps",
     }
-    (output_dir / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    (output_dir / "metadata.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8"
+    )
 
 
 def load_artifact(output_dir: Path) -> dict:
@@ -414,7 +435,9 @@ def _ensure_cfg_valid(cfg: TFTConfig) -> None:
     if cfg.input_chunk_length < 2:
         raise ValueError("input_chunk_length must be >= 2")
     if cfg.output_chunk_length != 1:
-        raise ValueError("This trainer assumes output_chunk_length=1 for 1-step evaluation.")
+        raise ValueError(
+            "This trainer assumes output_chunk_length=1 for 1-step evaluation."
+        )
     if cfg.hidden_size % cfg.num_attention_heads != 0:
         raise ValueError("hidden_size must be divisible by num_attention_heads.")
 
@@ -436,10 +459,16 @@ def _fit_and_score(
 
     min_train = cfg.input_chunk_length + cfg.output_chunk_length + 5
     if len(train_all_t) < min_train:
-        raise ValueError(f"Not enough train data for chunks. need>={min_train}, have={len(train_all_t)}")
+        raise ValueError(
+            f"Not enough train data for chunks. need>={min_train}, have={len(train_all_t)}"
+        )
 
     tr_t, va_t, tr_c, va_c = split_train_val(
-        train_all_t, train_all_c, cfg.val_ratio, cfg.input_chunk_length, cfg.output_chunk_length
+        train_all_t,
+        train_all_c,
+        cfg.val_ratio,
+        cfg.input_chunk_length,
+        cfg.output_chunk_length,
     )
 
     _set_seed(cfg.seed)
@@ -483,7 +512,9 @@ def _make_grid_cfgs_full(base_cfg: TFTConfig, space: SearchSpace) -> list[TFTCon
                                 out.append(
                                     TFTConfig(
                                         input_chunk_length=int(icl),
-                                        output_chunk_length=int(base_cfg.output_chunk_length),
+                                        output_chunk_length=int(
+                                            base_cfg.output_chunk_length
+                                        ),
                                         hidden_size=int(hs),
                                         lstm_layers=int(nl),
                                         num_attention_heads=int(heads),
@@ -497,14 +528,20 @@ def _make_grid_cfgs_full(base_cfg: TFTConfig, space: SearchSpace) -> list[TFTCon
                                         seed=int(base_cfg.seed),
                                         eval_stride=int(base_cfg.eval_stride),
                                         eval_max_points=base_cfg.eval_max_points,
-                                        early_stopping_patience=int(base_cfg.early_stopping_patience),
-                                        early_stopping_min_delta=float(base_cfg.early_stopping_min_delta),
+                                        early_stopping_patience=int(
+                                            base_cfg.early_stopping_patience
+                                        ),
+                                        early_stopping_min_delta=float(
+                                            base_cfg.early_stopping_min_delta
+                                        ),
                                     )
                                 )
     return out
 
 
-def _make_grid_cfgs_random(base_cfg: TFTConfig, space: SearchSpace, trials: int) -> list[TFTConfig]:
+def _make_grid_cfgs_random(
+    base_cfg: TFTConfig, space: SearchSpace, trials: int
+) -> list[TFTConfig]:
     """
     Samples random hyperparams (unique) with divisibility constraint.
     """
@@ -553,7 +590,9 @@ def _make_grid_cfgs_random(base_cfg: TFTConfig, space: SearchSpace, trials: int)
         )
 
     if len(out) < trials:
-        raise RuntimeError(f"Could not sample enough unique configs. requested={trials}, sampled={len(out)}")
+        raise RuntimeError(
+            f"Could not sample enough unique configs. requested={trials}, sampled={len(out)}"
+        )
 
     return out
 
@@ -582,7 +621,9 @@ def run_single(cfg: TFTConfig, output_dir: Path) -> None:
     print(f"Dataset shape: {df.shape}")
 
     target, past_cov, cov_cols = build_timeseries(df)
-    train_t, _, train_c, _, split_idx = split_train_test(target, past_cov, test_size=cfg.test_size)
+    train_t, _, train_c, _, split_idx = split_train_test(
+        target, past_cov, test_size=cfg.test_size
+    )
 
     scaler_target = Scaler(StandardScaler())
     scaler_cov = Scaler(StandardScaler())
@@ -598,9 +639,13 @@ def run_single(cfg: TFTConfig, output_dir: Path) -> None:
     model = res["model"]
 
     print("\nEvaluating (rolling 1-step on test) ...")
-    print(f"  MAE={metrics['mae']:.6f} RMSE={metrics['rmse']:.6f} n_test_points={metrics['n_test_points']}")
+    print(
+        f"  MAE={metrics['mae']:.6f} RMSE={metrics['rmse']:.6f} n_test_points={metrics['n_test_points']}"
+    )
 
-    save_artifact(output_dir, model, cfg, scaler_target, scaler_cov, covariate_columns=cov_cols)
+    save_artifact(
+        output_dir, model, cfg, scaler_target, scaler_cov, covariate_columns=cov_cols
+    )
     print(f"\nSaved artifact to: {output_dir}")
 
     naive = compute_naive_metrics(df)
@@ -608,13 +653,17 @@ def run_single(cfg: TFTConfig, output_dir: Path) -> None:
     print(f"  MAE={naive['mae']:.6f} RMSE={naive['rmse']:.6f}")
 
 
-def run_grid(base_cfg: TFTConfig, output_dir: Path, grid_mode: str, trials: int) -> None:
+def run_grid(
+    base_cfg: TFTConfig, output_dir: Path, grid_mode: str, trials: int
+) -> None:
     print("Loading dataset via random_forest_train.load_dataset() ...")
     df = load_rf_dataset(debug_samples=0)
     print(f"Dataset shape: {df.shape}")
 
     target, past_cov, cov_cols = build_timeseries(df)
-    train_t, _, train_c, _, split_idx = split_train_test(target, past_cov, test_size=base_cfg.test_size)
+    train_t, _, train_c, _, split_idx = split_train_test(
+        target, past_cov, test_size=base_cfg.test_size
+    )
 
     scaler_target = Scaler(StandardScaler())
     scaler_cov = Scaler(StandardScaler())
@@ -635,9 +684,13 @@ def run_grid(base_cfg: TFTConfig, output_dir: Path, grid_mode: str, trials: int)
         cfgs = _make_grid_cfgs_full(base_cfg, space)
         print(f"Running grid mode FULL: {len(cfgs)} trainings")
     else:
-        raise ValueError(f"Invalid GRID_MODE: {grid_mode}. Expected 'random' or 'full'.")
+        raise ValueError(
+            f"Invalid GRID_MODE: {grid_mode}. Expected 'random' or 'full'."
+        )
 
-    print(f"  eval_stride={base_cfg.eval_stride} eval_max_points={base_cfg.eval_max_points}")
+    print(
+        f"  eval_stride={base_cfg.eval_stride} eval_max_points={base_cfg.eval_max_points}"
+    )
     best = {"mae": float("inf"), "rmse": None, "cfg": None, "model": None, "n": None}
 
     for i, cfg_i in enumerate(cfgs, start=1):
@@ -647,13 +700,17 @@ def run_grid(base_cfg: TFTConfig, output_dir: Path, grid_mode: str, trials: int)
             f"lstm={cfg_i.lstm_layers} do={cfg_i.dropout} lr={cfg_i.lr} bs={cfg_i.batch_size}"
         )
         try:
-            res = _fit_and_score(cfg_i, target_s, cov_s, split_idx, scaler_target=scaler_target)
+            res = _fit_and_score(
+                cfg_i, target_s, cov_s, split_idx, scaler_target=scaler_target
+            )
         except Exception as e:
             print(f"  -> SKIP (error): {e}")
             continue
 
         m = res["metrics"]
-        print(f"  -> MAE={m['mae']:.6f} RMSE={m['rmse']:.6f} n_test_points={m['n_test_points']}")
+        print(
+            f"  -> MAE={m['mae']:.6f} RMSE={m['rmse']:.6f} n_test_points={m['n_test_points']}"
+        )
 
         if m["mae"] < best["mae"]:
             best = {
@@ -671,7 +728,14 @@ def run_grid(base_cfg: TFTConfig, output_dir: Path, grid_mode: str, trials: int)
     print(f"  MAE={best['mae']:.6f} RMSE={best['rmse']:.6f} n_test_points={best['n']}")
     print(f"  cfg={best['cfg']}")
 
-    save_artifact(output_dir, best["model"], best["cfg"], scaler_target, scaler_cov, covariate_columns=cov_cols)
+    save_artifact(
+        output_dir,
+        best["model"],
+        best["cfg"],
+        scaler_target,
+        scaler_cov,
+        covariate_columns=cov_cols,
+    )
     print(f"\nSaved best artifact to: {output_dir}")
 
     naive = compute_naive_metrics(df)

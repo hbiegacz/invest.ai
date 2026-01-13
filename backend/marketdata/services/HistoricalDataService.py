@@ -13,13 +13,28 @@ class HistoricalDataService:
     MS_IN_DAY = 24 * 60 * 60 * 1000
     DAYS_IN_YEAR = 365
     COLS = [
-        "open_time", "open", "high", "low", "close", "volume",
-        "close_time", "quote_volume", "num_trades",
-        "taker_buy_base", "taker_buy_quote", "ignore"
+        "open_time",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "close_time",
+        "quote_volume",
+        "num_trades",
+        "taker_buy_base",
+        "taker_buy_quote",
+        "ignore",
     ]
     FLOAT_COLS = [
-        "open", "high", "low", "close", "volume",
-        "quote_volume", "taker_buy_base", "taker_buy_quote"
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "quote_volume",
+        "taker_buy_base",
+        "taker_buy_quote",
     ]
     SYMBOLS = ["BTCUSDC", "ETHUSDC", "BNBUSDC", "XRPUSDC"]
     SYMBOL_SUFFIXES = {
@@ -50,8 +65,7 @@ class HistoricalDataService:
         if not excluded_cols:
             return df
         cols_to_drop = [
-            col for col in excluded_cols
-            if col in df.columns and col != "open_time"
+            col for col in excluded_cols if col in df.columns and col != "open_time"
         ]
         if cols_to_drop:
             df = df.drop(columns=cols_to_drop)
@@ -77,7 +91,9 @@ class HistoricalDataService:
                 "https://www.binance.com/api/v3/uiKlines"
                 f"?symbol={symbol}&interval=1d&limit=1000&endTime={batch_end_ms}"
             )
-            print(f"[{symbol}] Pobieranie partii {i + 1}/{batches}... endTime={batch_end_ms}")
+            print(
+                f"[{symbol}] Pobieranie partii {i + 1}/{batches}... endTime={batch_end_ms}"
+            )
             data = self._fetch(url)
             if not data:
                 print(f"[{symbol}] Brak danych / błąd, lecimy dalej.")
@@ -90,12 +106,16 @@ class HistoricalDataService:
             df["close_time"] = pd.to_datetime(df["close_time"], unit="ms")
             dfs.append(df)
         if not dfs:
-            raise ValueError(f"Nie udało się pobrać żadnych danych z Binance dla symbolu {symbol}.")
+            raise ValueError(
+                f"Nie udało się pobrać żadnych danych z Binance dla symbolu {symbol}."
+            )
         full = pd.concat(dfs, ignore_index=True).sort_values("open_time")
         cutoff_start_ms = end_time_ms - total_days * self.MS_IN_DAY
         cutoff_start = pd.to_datetime(cutoff_start_ms, unit="ms")
         full = full[full["open_time"] >= cutoff_start]
-        full = full.drop_duplicates(subset=["open_time"], keep="last").reset_index(drop=True)
+        full = full.drop_duplicates(subset=["open_time"], keep="last").reset_index(
+            drop=True
+        )
         return full
 
     def fetch_spx_df(self):
@@ -168,7 +188,9 @@ class HistoricalDataService:
                 years_back=years_back,
                 end_time_ms=end_time_ms,
             )
-            df_trimmed = df[["open_time", "open", "high", "low", "close", "volume", "num_trades"]].copy()
+            df_trimmed = df[
+                ["open_time", "open", "high", "low", "close", "volume", "num_trades"]
+            ].copy()
             df_trimmed = df_trimmed.rename(
                 columns={
                     "open": f"open_{suffix}",
@@ -186,8 +208,7 @@ class HistoricalDataService:
         if merged_df is None:
             raise ValueError("Nie udało się zbudować df dla żadnego symbolu.")
         merged_df = (
-            merged_df
-            .sort_values("open_time")
+            merged_df.sort_values("open_time")
             .drop_duplicates(subset=["open_time"], keep="last")
             .reset_index(drop=True)
         )
@@ -195,16 +216,14 @@ class HistoricalDataService:
         min_time = merged_df["open_time"].min()
         max_time = merged_df["open_time"].max()
         spx_df = spx_df[
-            (spx_df["open_time"] >= min_time)
-            & (spx_df["open_time"] <= max_time)
+            (spx_df["open_time"] >= min_time) & (spx_df["open_time"] <= max_time)
         ]
         merged_df = merged_df.merge(spx_df, on="open_time", how="left")
         gdp_df = self._fetch_gdp_df()
         unrate_df = self._fetch_unrate_df()
         if not gdp_df.empty:
             gdp_df = gdp_df[
-                (gdp_df["open_time"] >= min_time)
-                & (gdp_df["open_time"] <= max_time)
+                (gdp_df["open_time"] >= min_time) & (gdp_df["open_time"] <= max_time)
             ]
             merged_df = merged_df.merge(gdp_df, on="open_time", how="left")
         if not unrate_df.empty:
@@ -225,21 +244,40 @@ class HistoricalDataService:
         ]
         cols_to_ffill = [c for c in cols_to_ffill if c in merged_df.columns]
         if cols_to_ffill:
-            merged_df[cols_to_ffill] = (
-                merged_df[cols_to_ffill]
-                .ffill()
-                .bfill()
-            )
+            merged_df[cols_to_ffill] = merged_df[cols_to_ffill].ffill().bfill()
         desired_cols = [
             "open_time",
-            "open_btc", "high_btc", "close_btc", "low_btc",
-            "open_eth", "high_eth", "close_eth", "low_eth",
-            "open_bnb", "high_bnb", "close_bnb", "low_bnb",
-            "open_xrp", "high_xrp", "close_xrp", "low_xrp",
-            "volume_btc", "volume_xrp", "volume_bnb", "volume_eth",
-            "num_trades_btc", "num_trades_bnb", "num_trades_eth", "num_trades_xrp",
-            "open_spx", "high_spx", "close_spx", "low_spx", "volume_spx",
-            "gdp", "unrate",
+            "open_btc",
+            "high_btc",
+            "close_btc",
+            "low_btc",
+            "open_eth",
+            "high_eth",
+            "close_eth",
+            "low_eth",
+            "open_bnb",
+            "high_bnb",
+            "close_bnb",
+            "low_bnb",
+            "open_xrp",
+            "high_xrp",
+            "close_xrp",
+            "low_xrp",
+            "volume_btc",
+            "volume_xrp",
+            "volume_bnb",
+            "volume_eth",
+            "num_trades_btc",
+            "num_trades_bnb",
+            "num_trades_eth",
+            "num_trades_xrp",
+            "open_spx",
+            "high_spx",
+            "close_spx",
+            "low_spx",
+            "volume_spx",
+            "gdp",
+            "unrate",
         ]
         existing_cols = [c for c in desired_cols if c in merged_df.columns]
         merged_df = merged_df[existing_cols]
