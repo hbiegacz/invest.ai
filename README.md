@@ -1,18 +1,20 @@
-# Invest.ai | ML-Powered Bitcoin Forecasting
+# Invest.ai | ML-Powered Bitcoin Forecasting 💰📈🔮
 [![Contributors](https://img.shields.io/github/contributors/hbiegacz/invest.ai?color=red)](https://github.com/hbiegacz/invest.ai/graphs/contributors)
 [![Commit Activity](https://img.shields.io/badge/Commits-📈%20View%20Graph-orange)](https://github.com/hbiegacz/invest.ai/graphs/commit-activity)
 [![Repo Size](https://img.shields.io/github/repo-size/hbiegacz/invest.ai?color=yellow)](https://github.com/hbiegacz/invest.ai)
 [![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-~2.5k-green?logo=git)](https://github.com/hbiegacz/invest.ai)
 [![License](https://img.shields.io/github/license/hbiegacz/invest.ai?color=blue)](LICENSE)
 
-<!-- 
-'slogan'
-description  
+***Use the power od Machine Learning to assist you in your Bitcoin investing journey!***
 
-## Quick demo
+Invest.ai lets you compare Bitcoin price predictions from multiple ML models (TFT, LSTM, Random Forest, Linear Regression) side-by-side for smarter decisions.
+It also tracks key market factors like US GDP, unemployment rates, trading volumes of other cryptos, and more through simple Docker-run dashboards. 
+
+<!-- 
+## 🎥 Quick demo
 -->
 
-## Tech Stack
+## 💻 Tech Stack
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![DjangoREST](https://img.shields.io/badge/DJANGO-REST-ff1709?style=for-the-badge&logo=django&logoColor=white&color=ff1709&labelColor=gray)
 ![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
@@ -23,7 +25,7 @@ description
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-%23F7931E.svg?style=for-the-badge&logo=scikit-learn&logoColor=white)
 
 <!-- 
-## Machine learning
+## 🤖🧠 Machine learning
 Models used:
 TFT
 LSTM
@@ -32,7 +34,7 @@ Linear Regression
 -->
 
 
-## Installation & Execution
+## 🚀 Installation & Execution
 Prerequisites:
 - Docker Engine
 - Docker Compose
