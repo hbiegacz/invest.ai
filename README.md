@@ -5,7 +5,7 @@
 [![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-~2.5k-green?logo=git)](https://github.com/hbiegacz/invest.ai)
 [![License](https://img.shields.io/github/license/hbiegacz/invest.ai?color=blue)](LICENSE)
 
-***Use the power od Machine Learning to assist you in your Bitcoin investing journey!***
+***Use the power of Machine Learning to assist you in your Bitcoin investing journey!***
 
 Invest.ai lets you compare Bitcoin price predictions from multiple ML models (TFT, LSTM, Random Forest, Linear Regression) side-by-side for smarter decisions.
 It also tracks key market factors like US GDP, unemployment rates, trading volumes of other cryptos, and more through simple Docker-run dashboards. 
@@ -24,7 +24,16 @@ It also tracks key market factors like US GDP, unemployment rates, trading volum
 ![Pandas](https://img.shields.io/badge/pandas-%23150458.svg?style=for-the-badge&logo=pandas&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-%23F7931E.svg?style=for-the-badge&logo=scikit-learn&logoColor=white)
 
+## 🧩 Architecture
+The project utilizes a containerized architecture to ensure seamless deployment and scalability.
+
+- **Backend (Django REST Framework):** Fetches market data from external APIs (Binance, FRED, Coinmetrics, Stooq), processes it using Parquet files, and serves as the API for predictions and analytics.
+- **Machine Learning (Python):** Includes models like **TFT**, **LSTM**, **Random Forest**, and **Linear Regression**. Uses advanced feature engineering and **SHAP analysis** to refine and interpret model results.
+- **Frontend (React + Vite + TypeScript):** A modern dashboard for data visualization and comparing different model predictions side-by-side.
+
 <!-- 
+
+
 ## 🤖🧠 Machine learning
 Models used:
 TFT
@@ -38,7 +47,7 @@ Linear Regression
 Prerequisites:
 - Docker Engine
 - Docker Compose
-> Note: Be aware that the initial installation process might take a while because all the dependencies are being downlowaded.
+> Note: Be aware that the initial installation process might take a while because all the dependencies are being downloaded.
 ```bash
   git clone https://github.com/hbiegacz/invest.ai.git
   cd invest.ai
