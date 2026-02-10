@@ -23,7 +23,7 @@ It also tracks key market factors like US GDP, unemployment rates, trading volum
 ![NumPy](https://img.shields.io/badge/numpy-%23013243.svg?style=for-the-badge&logo=numpy&logoColor=white)
 ![Pandas](https://img.shields.io/badge/pandas-%23150458.svg?style=for-the-badge&logo=pandas&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-%23F7931E.svg?style=for-the-badge&logo=scikit-learn&logoColor=white)
-
+![Binance](https://img.shields.io/badge/Binance-FCD535?style=for-the-badge&logo=binance&logoColor=white)
 ## 📊 Data Sources
 The models are trained and updated using data from multiple professional sources:
 - **Crypto Market Data (Binance)**: Real-time and historical prices (Open, Close, High, Low), trading volumes, and number of trades for BTC, ETH, BNB, and XRP.
