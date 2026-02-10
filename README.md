@@ -2,8 +2,8 @@
 [![Contributors](https://img.shields.io/github/contributors/hbiegacz/invest.ai?color=red)](https://github.com/hbiegacz/invest.ai/graphs/contributors)
 [![Commit Activity](https://img.shields.io/badge/Commits-📈%20View%20Graph-orange)](https://github.com/hbiegacz/invest.ai/graphs/commit-activity)
 [![Repo Size](https://img.shields.io/github/repo-size/hbiegacz/invest.ai?color=yellow)](https://github.com/hbiegacz/invest.ai)
-[![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-~2.5k-green?logo=git)](https://github.com/hbiegacz/invest.ai)
-[![License](https://img.shields.io/github/license/hbiegacz/invest.ai?color=blue)](LICENSE)
+[![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-~9.5k-green?logo=git)](https://github.com/hbiegacz/invest.ai)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ***Use the power of Machine Learning to assist you in your Bitcoin investing journey!***
 
