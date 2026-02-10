@@ -10,9 +10,9 @@
 Invest.ai lets you compare Bitcoin price predictions from multiple ML models (TFT, LSTM, Random Forest, Linear Regression) side-by-side for smarter decisions.
 It also tracks key market factors like US GDP, unemployment rates, trading volumes of other cryptos, and more through simple Docker-run dashboards. 
 
-<!-- 
 ## 🎥 Quick demo
--->
+> You can find a more detailed & descriptive demonstration of the project on youtube [here](https://www.youtube.com/watch?v=gqYQ3Df0xIU).
+![Quick Demo](docs/quick_demo.gif)
 
 ## 💻 Tech Stack
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
