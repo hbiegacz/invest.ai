@@ -34,3 +34,9 @@ skrypt.py
 output.txt
 *.aux
 *.out
+/backend/htmlcov/
+/backend/.coverage
+/backend/.pytest_cache/
+.pytest_cache/
+.coverage
+htmlcov/

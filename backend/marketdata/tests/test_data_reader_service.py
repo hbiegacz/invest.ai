@@ -40,7 +40,7 @@ def test_data_reader_service_get_market_data_refreshes_if_needed(mocker):
     mock_refresh.assert_called_once()
 
 
-def test_data_reader_service_load_filtered_frame_filters_by_date(mocker, tmp_path):
+def test_data_reader_service_load_filtered_frame_filters_by_date(mocker):
     df = pd.DataFrame(
         {
             "open_time": [
@@ -59,3 +59,37 @@ def test_data_reader_service_load_filtered_frame_filters_by_date(mocker, tmp_pat
 
     assert len(result_df) == 1
     assert result_df.iloc[0]["close_btc"] == 50000
+
+
+def test_data_reader_service_get_market_data_handles_exception(mocker):
+    service = DataReaderService()
+    mocker.patch.object(service, "_is_data_old", return_value=False)
+    mocker.patch.object(
+        service, "_load_filtered_frame", side_effect=Exception("Read Error")
+    )
+
+    with pytest.raises(ValueError, match="Data processing error: Read Error"):
+        service.get_market_data(requested_metrics=["close_btc"])
+
+
+def test_data_reader_service_is_data_insufficient_returns_true(mocker):
+    service = DataReaderService()
+    # Case 1: Empty DF
+    assert service._is_data_insufficient(pd.DataFrame(), 10) is True
+
+    # Case 2: Missing open_time
+    assert service._is_data_insufficient(pd.DataFrame({"close_btc": [1]}), 10) is True
+
+    # Case 3: Min date > cutoff
+    df = pd.DataFrame(
+        {"open_time": [pd.Timestamp.now() - pd.DateOffset(years=5)], "close_btc": [1]}
+    )
+    assert service._is_data_insufficient(df, 10) is True
+
+
+def test_data_reader_service_is_data_insufficient_returns_false(mocker):
+    service = DataReaderService()
+    df = pd.DataFrame(
+        {"open_time": [pd.Timestamp.now() - pd.DateOffset(years=15)], "close_btc": [1]}
+    )
+    assert service._is_data_insufficient(df, 10) is False
