@@ -4,6 +4,7 @@
 [![Repo Size](https://img.shields.io/github/repo-size/hbiegacz/invest.ai?color=yellow)](https://github.com/hbiegacz/invest.ai)
 [![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-~9.5k-green?logo=git)](https://github.com/hbiegacz/invest.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Coverage](https://img.shields.io/badge/Coverage-73%25-purple)](backend/htmlcov/index.html)
 
 ***Use the power of Machine Learning to assist you in your Bitcoin investing journey!***
 
@@ -53,6 +54,19 @@ The modeling process evolved through several iterations:
 3. **Advanced Time-Series Models**: To better understand how past events affect the future, we used models designed for sequences:
    - **LSTM**: Looks at the last 96 days of data to spot medium-term trends.
    - **TFT (Best Performer)**: Uses an "attention" mechanism to focus on the most important historical moments. It also accounts for weekly and yearly cycles, which helped it achieve the best results in our tests.
+
+## 🧪 Testing & Coverage
+The backend is tested using `pytest` with `pytest-cov` for measurement.
+- **Current Coverage:** **73%** (Backend)
+- **Tests Passed:** 48 cases covering views, services, and models.
+
+To run tests and see the coverage report locally:
+```bash
+  # Inside backend directory (or via docker exec)
+  pytest --cov=marketdata --cov-report=term-missing
+```
+
+Detailed HTML reports are generated in `backend/htmlcov/`.
 
 ## 🚀 Installation & Execution
 Prerequisites:
